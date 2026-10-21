@@ -1,0 +1,122 @@
+#pragma once
+#ifndef UNICODE
+#define UNICODE
+#define _UNICODE
+#endif
+#define NOMINMAX
+#include <atomic>
+#include <filesystem>
+#include <fstream>
+#include <functional>
+#include <memory>
+#include <shlobj.h>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <vector>
+#include <windows.h>
+namespace fs = std::filesystem;
+namespace fuyi {
+extern HINSTANCE module;
+inline void pinModule() {
+    HMODULE pinned = nullptr;
+    GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
+                       (LPCWSTR)&pinModule, &pinned);
+}
+
+inline std::wstring wide(const std::string &value) {
+    if (value.empty())
+        return {};
+    int n = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, value.data(), (int)value.size(), nullptr, 0);
+    if (!n)
+        throw std::runtime_error("Invalid UTF-8");
+    std::wstring out(n, 0);
+    MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, value.data(), (int)value.size(), out.data(), n);
+    return out;
+}
+inline std::string utf8(const std::wstring &value) {
+    if (value.empty())
+        return {};
+    int n = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value.data(), (int)value.size(), nullptr, 0,
+                                nullptr, nullptr);
+    if (!n)
+        throw std::runtime_error("Invalid Unicode");
+    std::string out(n, 0);
+    WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value.data(), (int)value.size(), out.data(), n,
+                        nullptr, nullptr);
+    return out;
+}
+inline fs::path directory() {
+    std::vector<wchar_t> path(32768);
+    DWORD n = GetModuleFileNameW(module, path.data(), (DWORD)path.size());
+    if (!n || n >= path.size())
+        throw std::runtime_error("Module path unavailable");
+    return fs::path(std::wstring(path.data(), n)).parent_path();
+}
+inline fs::path configPath() {
+    PWSTR raw = nullptr;
+    if (FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &raw)))
+        throw std::runtime_error("Local settings unavailable");
+    fs::path path(raw);
+    CoTaskMemFree(raw);
+    path /= L"FloatingTranslate";
+    fs::create_directories(path);
+    return path / L"settings.ini";
+}
+struct Options {
+    bool english = false, above = true, privacy = false, direct = false;
+    static Options read() {
+        Options o;
+        try {
+            auto p = configPath();
+            o.english = GetPrivateProfileIntW(L"input", L"englishDefault", 0, p.c_str()) != 0;
+            o.above = GetPrivateProfileIntW(L"input", L"above", 1, p.c_str()) != 0;
+            o.privacy = GetPrivateProfileIntW(L"input", L"privacy", 0, p.c_str()) != 0;
+            o.direct = GetPrivateProfileIntW(L"input", L"directEnglish", 0, p.c_str()) != 0;
+        } catch (...) {
+            o.privacy = true;
+        }
+        return o;
+    }
+    void save() const {
+        auto p = configPath();
+        for (auto entry : std::vector<std::pair<const wchar_t *, bool>>{{L"englishDefault", english},
+                                                                        {L"above", above},
+                                                                        {L"privacy", privacy},
+                                                                        {L"directEnglish", direct}})
+            if (!WritePrivateProfileStringW(L"input", entry.first, entry.second ? L"1" : L"0", p.c_str()))
+                throw std::runtime_error("Cannot save settings");
+    }
+};
+inline void clipboard(HWND owner, const std::wstring &text) {
+    if (text.empty() || !OpenClipboard(owner))
+        return;
+    HGLOBAL mem = GlobalAlloc(GMEM_MOVEABLE, (text.size() + 1) * sizeof(wchar_t));
+    if (mem) {
+        void *p = GlobalLock(mem);
+        if (p) {
+            memcpy(p, text.c_str(), (text.size() + 1) * sizeof(wchar_t));
+            GlobalUnlock(mem);
+            if (!EmptyClipboard() || !SetClipboardData(CF_UNICODETEXT, mem))
+                GlobalFree(mem);
+        } else
+            GlobalFree(mem);
+    }
+    CloseClipboard();
+}
+inline HMODULE loadLocal(const wchar_t *name) {
+    auto p = directory() / name;
+    return LoadLibraryExW(p.c_str(), nullptr,
+                          LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
+}
+inline void settings() {
+    auto exe = directory() / L"FuyiSettings.exe";
+    ShellExecuteW(nullptr, L"open", exe.c_str(), nullptr, directory().c_str(), SW_SHOWNORMAL);
+}
+template <class T> void release(T *&p) {
+    if (p) {
+        p->Release();
+        p = nullptr;
+    }
+}
+} // namespace fuyi

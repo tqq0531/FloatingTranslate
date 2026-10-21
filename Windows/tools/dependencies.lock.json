@@ -1,0 +1,32 @@
+{
+  "onnxruntime": {
+    "file": "ort.nupkg",
+    "url": "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/1.23.2/microsoft.ml.onnxruntime.1.23.2.nupkg",
+    "sha256": "25fe172f7fcdf34f2b5b02c8b997f6b88abc282956849d4af4335af23d0c4e4a"
+  },
+  "extensions": {
+    "file": "extensions.nupkg",
+    "url": "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime.extensions/0.14.0/microsoft.ml.onnxruntime.extensions.0.14.0.nupkg",
+    "sha256": "b13b27e01d8f3133a254555f3241763b05b89624537fddd8d0a593ccd8f496b4"
+  },
+  "rime": {
+    "file": "rime-clang.7z",
+    "url": "https://github.com/rime/librime/releases/download/1.17.0/rime-33e7814-Windows-clang-x64.7z",
+    "sha256": "f850177bb2d256574348258f221730dbf3d358a53dbeca4bd49cdc338d927438"
+  },
+  "vc_redist": {
+    "file": "vc_redist.x64.exe",
+    "url": "https://aka.ms/vs/17/release/vc_redist.x64.exe",
+    "sha256": "cc0ff0eb1dc3f5188ae6300faef32bf5beeba4bdd6e8e445a9184072096b713b"
+  },
+  "rime_license": {
+    "file": "rime-license.txt",
+    "url": "https://raw.githubusercontent.com/rime/librime/1.17.0/LICENSE",
+    "sha256": "f67d27a6d2d586fcfed4b4c886a83747095396a39b6641e18e855086be2ec400"
+  },
+  "mingw_licenses": {
+    "file": "mingw-notices.txt",
+    "url": "https://raw.githubusercontent.com/mstorsjo/llvm-mingw/20261006/LICENSE.txt",
+    "sha256": "8e5db0129069005be2a07be3297e198888fd72fad62a13a611504660c6b7e3c7"
+  }
+}

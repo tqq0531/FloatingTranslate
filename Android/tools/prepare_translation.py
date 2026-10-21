@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Build-time only. Fetch pinned public weights, verify SHA-256, export local tokenizer."""
-import base64, hashlib, json, pathlib, urllib.request
+import base64, hashlib, json, pathlib, urllib.request, os
 import onnx
 from onnx import helper, TensorProto
 import sentencepiece as spm
 ROOT=pathlib.Path(__file__).resolve().parents[1]
-OUT=ROOT/'app/src/main/assets/translation'
+OUT=pathlib.Path(os.environ.get('FUYI_TRANSLATION_ASSETS',ROOT/'app/src/main/assets/translation'))
 REV='39d480d52a9ea3065a1f117adfe4dbc55de10e6f'
 FILES={
  'source.spm':'e27a3a1b539f4959ec72ea60e453f49156289f95d4e6000b29332efc45616203',

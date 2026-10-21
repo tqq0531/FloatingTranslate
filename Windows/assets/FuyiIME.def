@@ -1,0 +1,6 @@
+LIBRARY FuyiIME
+EXPORTS
+ DllGetClassObject
+ DllCanUnloadNow
+ DllRegisterServer
+ DllUnregisterServer
