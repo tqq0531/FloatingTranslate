@@ -1,0 +1,3 @@
+# Build-time export only; no Python runtime ships in the APK.
+onnx==1.23.2
+sentencepiece==0.2.2

@@ -15,7 +15,6 @@ public final class MainActivity extends Activity {
     private TextView status,downloadDetail,engineBadge;
     private ProgressBar downloadProgress;
     private Button downloadButton;
-    private ModelDownloadMonitor downloadMonitor;
     private boolean downloading;
     private DownloadProgress latestProgress=new DownloadProgress(DownloadProgress.Stage.PREPARING,0,-1);
     private LinearLayout body;
@@ -30,8 +29,8 @@ public final class MainActivity extends Activity {
         scroll.setOnApplyWindowInsetsListener((v,insets)->{int top,bottom;if(android.os.Build.VERSION.SDK_INT>=30){var bars=insets.getInsets(WindowInsets.Type.systemBars());top=bars.top;bottom=bars.bottom;}else{top=insets.getSystemWindowInsetTop();bottom=insets.getSystemWindowInsetBottom();}v.setPadding(0,top,0,bottom);return insets;});
         scroll.addView(body);setContentView(scroll);
         createHeader();createWelcome();createPreferences();createLanguagePack();createTrial();createPrivacy();
-        var footer=SettingsUi.text(this,"浮译 Android  ·  0.1.3",11,SettingsUi.MUTED,false);footer.setGravity(Gravity.CENTER);footer.setPadding(0,d(24),0,0);body.addView(footer);
-        if(Options.prefs(this).getBoolean("languageDownloadRequested",false))beginLanguageDownload();else checkInstalledLanguagePack();
+        var footer=SettingsUi.text(this,"浮译 Android  ·  0.1.4",11,SettingsUi.MUTED,false);footer.setGravity(Gravity.CENTER);footer.setPadding(0,d(24),0,0);body.addView(footer);
+        beginLanguageDownload();
     }
     private int d(float value){return SettingsUi.dp(this,value);}
     private void section(String title,String note){
@@ -70,13 +69,13 @@ public final class MainActivity extends Activity {
     private void confirmClearHistory(){new AlertDialog.Builder(this).setTitle("清空全部历史？").setMessage("删除浮译保存的复制记录。系统当前剪贴板不受影响。").setNegativeButton("取消",null).setPositiveButton("清空",(dialog,which)->{new ClipboardStore(this).clear();Toast.makeText(this,"历史已清空",Toast.LENGTH_SHORT).show();}).show();}
     private void createLanguagePack(){
         section("本机翻译","正文在设备上处理");var card=SettingsUi.card(this);
-        var title=SettingsUi.heading(this,"译","中英离线语言包","一次准备，随时离线使用",SettingsUi.ACCENT,SettingsUi.PALE);
+        var title=SettingsUi.heading(this,"译","中英离线语言包","模型已随应用内置，无需下载",SettingsUi.ACCENT,SettingsUi.PALE);
         engineBadge=SettingsUi.chip(this,"离线模型",SettingsUi.MUTED,SettingsUi.BG);var badgeLp=new LinearLayout.LayoutParams(-2,-2);badgeLp.leftMargin=d(8);title.addView(engineBadge,badgeLp);card.addView(title);SettingsUi.gap(card,16);
-        status=SettingsUi.text(this,"首次准备需要 Wi-Fi，下载后即可本机翻译。",12,SettingsUi.MUTED,false);status.setId(R.id.download_status);card.addView(status);
+        status=SettingsUi.text(this,"从安装包初始化模型，全程无需网络。",12,SettingsUi.MUTED,false);status.setId(R.id.download_status);card.addView(status);
         downloadProgress=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);downloadProgress.setId(R.id.download_progress);downloadProgress.setMax(100);downloadProgress.setProgressTintList(android.content.res.ColorStateList.valueOf(SettingsUi.ACCENT));downloadProgress.setIndeterminateTintList(android.content.res.ColorStateList.valueOf(SettingsUi.ACCENT));
         var progressLayout=new LinearLayout.LayoutParams(-1,d(8));progressLayout.topMargin=d(12);progressLayout.bottomMargin=d(8);card.addView(downloadProgress,progressLayout);downloadProgress.setVisibility(View.GONE);
         downloadDetail=SettingsUi.text(this,"",12,SettingsUi.ACCENT,true);downloadDetail.setId(R.id.download_detail);downloadDetail.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);downloadDetail.setVisibility(View.GONE);card.addView(downloadDetail);SettingsUi.gap(card,14);
-        downloadButton=SettingsUi.button(this,"准备离线语言包",SettingsUi.PALE,SettingsUi.ACCENT,()->new AlertDialog.Builder(this).setTitle("下载本机翻译语言包").setMessage("通过 Google ML Kit 下载中英模型，需要 Wi-Fi。正文和译文在设备上处理，不发送给开发者；SDK 可能联网下载模型、更新以及发送使用与性能指标。").setNegativeButton("取消",null).setPositiveButton("下载",(dialog,which)->beginLanguageDownload()).show());downloadButton.setId(R.id.download_button);card.addView(downloadButton,new LinearLayout.LayoutParams(-1,d(46)));body.addView(card);
+        downloadButton=SettingsUi.button(this,"检查内置模型",SettingsUi.PALE,SettingsUi.ACCENT,this::beginLanguageDownload);downloadButton.setId(R.id.download_button);card.addView(downloadButton,new LinearLayout.LayoutParams(-1,d(46)));body.addView(card);
     }
     private void createTrial(){
         section("试一试","用一句话，感受浮译");var card=SettingsUi.card(this);
@@ -88,43 +87,32 @@ public final class MainActivity extends Activity {
         section("隐私与安全","清楚知道数据去向");var card=SettingsUi.card(this);
         SettingsUi.privacyRow(card,"✓","本机加密保存","复制记录仅存于应用私有目录，禁止系统备份。");SettingsUi.gap(card,16);
         SettingsUi.privacyRow(card,"·","敏感输入保护","密码、验证码、密钥建议切回系统键盘。");SettingsUi.gap(card,16);
-        SettingsUi.privacyRow(card,"↗","明确网络边界","语言包下载与 SDK 使用、性能指标可能联网。");SettingsUi.divider(card);
-        var detail=SettingsUi.text(this,"复制历史使用 Android Keystore 加密，24 小时到期后不再展示或允许插入。休眠、关机或强行停止可能推迟文件清理，再次访问会先过滤到期记录。关闭保存开关会立即清空。\n\n密码框、不允许个性化学习的输入框，以及带敏感标记的剪贴板会跳过。来源应用没有正确标记密码时无法可靠识别。\n\n正文与译文使用本机模型处理，没有开发者服务器或输入历史记录。ML Kit 可能连接 Google 下载、更新模型并发送 SDK 使用与性能指标，不能承诺完全不联网。",12,SettingsUi.MUTED,false);detail.setId(R.id.privacy_details);detail.setVisibility(View.GONE);
+        SettingsUi.privacyRow(card,"✓","无需联网","模型随应用内置，此版本没有联网权限。");SettingsUi.divider(card);
+        var detail=SettingsUi.text(this,"复制历史使用 Android Keystore 加密，24 小时到期后不再展示或允许插入。休眠、关机或强行停止可能推迟文件清理，再次访问会先过滤到期记录。关闭保存开关会立即清空。\n\n密码框、不允许个性化学习的输入框，以及带敏感标记的剪贴板会跳过。来源应用没有正确标记密码时无法可靠识别。\n\n正文与译文使用本机模型处理，没有开发者服务器或输入历史记录。Android 0.1.4 使用 APK 内置的 OPUS-MT 中译英模型，已移除 Google ML Kit 和应用联网权限。不下载模型、不调用云翻译，不发送使用统计。此说明适用于本应用；系统及其他应用的网络行为独立。",12,SettingsUi.MUTED,false);detail.setId(R.id.privacy_details);detail.setVisibility(View.GONE);
         Button expand=SettingsUi.button(this,"查看完整隐私说明  ⌄",Color.TRANSPARENT,SettingsUi.ACCENT,()->{});expand.setId(R.id.privacy_expand);expand.setOnClickListener(v->{boolean show=detail.getVisibility()!=View.VISIBLE;detail.setVisibility(show?View.VISIBLE:View.GONE);expand.setText(show?"收起隐私说明  ⌃":"查看完整隐私说明  ⌄");});card.addView(expand,new LinearLayout.LayoutParams(-1,d(44)));card.addView(detail);body.addView(card);
     }
-    private void checkInstalledLanguagePack(){
-        com.google.mlkit.common.model.RemoteModelManager.getInstance().getDownloadedModels(com.google.mlkit.nl.translate.TranslateRemoteModel.class).addOnSuccessListener(models->{
-            if(!isDestroyed()&&!downloading&&models.stream().anyMatch(model->model.getLanguage().equals(com.google.mlkit.nl.translate.TranslateLanguage.CHINESE))){renderDownloadProgress(new DownloadProgress(DownloadProgress.Stage.READY,0,-1));downloadButton.setText("检查语言包");}
-        });
-    }
     void beginLanguageDownload(){
-        if(downloading)return;downloading=true;Options.prefs(this).edit().putBoolean("languageDownloadRequested",true).apply();
-        downloadButton.setEnabled(false);downloadButton.setText("正在准备语言包…");
-        renderDownloadProgress(new DownloadProgress(DownloadProgress.Stage.PREPARING,0,-1));startDownloadMonitor();
-        if(translator==null)translator=new LocalTranslator();
-        translator.download((text,message)->{
-            if(isDestroyed())return;downloading=false;Options.prefs(this).edit().putBoolean("languageDownloadRequested",false).apply();stopDownloadMonitor();
-            boolean ready=message.contains("已就绪");
+        if(downloading)return;downloading=true;downloadButton.setEnabled(false);
+        renderDownloadProgress(new DownloadProgress(DownloadProgress.Stage.PREPARING,0,-1));
+        if(translator==null)translator=new LocalTranslator(this);
+        translator.prepare(value->{if(!isDestroyed())renderDownloadProgress(value);},(text,message)->{
+            if(isDestroyed())return;downloading=false;boolean ready=message.contains("已就绪");
             renderDownloadProgress(new DownloadProgress(ready?DownloadProgress.Stage.READY:DownloadProgress.Stage.FAILED,latestProgress.downloaded(),latestProgress.total()));
-            downloadButton.setEnabled(true);downloadButton.setText(ready?"检查语言包":"重试下载语言包");
+            downloadButton.setEnabled(true);downloadButton.setText(ready?"检查内置模型":"重新初始化模型");
         });
     }
     void renderDownloadProgress(DownloadProgress value){
         latestProgress=value;status.setText(value.message());
         boolean ready=value.stage()==DownloadProgress.Stage.READY,failed=value.stage()==DownloadProgress.Stage.FAILED;
-        String phase=switch(value.stage()){case READY->"已就绪";case FAILED->"待重试";case DOWNLOADING->"下载中";case WAITING_WIFI,WAITING_NETWORK->"等待网络";case RETRYING->"重试中";case VERIFYING->"安装中";default->"准备中";};
+        String phase=switch(value.stage()){case READY->"已就绪";case FAILED->"待重试";case EXTRACTING->"解压中";case VERIFYING->"加载中";default->"准备中";};
         engineBadge.setText(phase);
-        if(downloading)downloadButton.setText(value.stage()==DownloadProgress.Stage.DOWNLOADING?"正在下载语言包…":value.stage()==DownloadProgress.Stage.VERIFYING?"正在安装语言包…":"正在准备语言包…");
+        if(downloading)downloadButton.setText(value.stage()==DownloadProgress.Stage.EXTRACTING?"正在解压模型…":value.stage()==DownloadProgress.Stage.VERIFYING?"正在加载引擎…":"正在准备语言包…");
         engineBadge.setTextColor(ready?SettingsUi.GREEN:SettingsUi.ACCENT);engineBadge.setBackground(SettingsUi.shape(this,ready?0xffE9F6F1:SettingsUi.PALE,20));downloadProgress.setVisibility(View.VISIBLE);downloadDetail.setVisibility(View.VISIBLE);
         downloadProgress.setIndeterminate(!value.determinate()&&value.stage()!=DownloadProgress.Stage.FAILED);
         if(value.determinate())downloadProgress.setProgress(value.percent());
-        downloadProgress.setContentDescription("语言包下载："+value.message()+"，"+value.detail());downloadDetail.setText(value.detail());
+        downloadProgress.setContentDescription("内置模型："+value.message()+"，"+value.detail());downloadDetail.setText(value.detail());
     }
-    private void startDownloadMonitor(){if(downloadMonitor==null){downloadMonitor=new ModelDownloadMonitor(this,value->{if(downloading&&!isDestroyed())renderDownloadProgress(value);});downloadMonitor.start();}}
-    private void stopDownloadMonitor(){if(downloadMonitor!=null){downloadMonitor.close();downloadMonitor=null;}}
-    @Override protected void onStart(){super.onStart();if(downloading)startDownloadMonitor();}
-    @Override protected void onStop(){stopDownloadMonitor();super.onStop();}
     @Override protected void onResume(){super.onResume();Options.prefs(this).registerOnSharedPreferenceChangeListener(optionsChanged);syncOptions();new ClipboardStore(this).list();}
     @Override protected void onPause(){Options.prefs(this).unregisterOnSharedPreferenceChangeListener(optionsChanged);super.onPause();}
-    @Override protected void onDestroy(){stopDownloadMonitor();if(translator!=null)translator.close();super.onDestroy();}
+    @Override protected void onDestroy(){if(translator!=null)translator.close();super.onDestroy();}
 }

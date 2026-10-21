@@ -3,3 +3,10 @@ local.properties
 **/build/
 *.jks
 *.keystore
+# Reproducible model weights: run tools/prepare_translation.py before building.
+app/src/main/assets/translation/*.onnx
+app/src/main/assets/translation/source.spm
+app/src/main/assets/translation/vocab.json
+app/src/main/assets/translation/sp-map.json
+
+.model-venv/

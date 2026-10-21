@@ -178,6 +178,7 @@ public final class FuyiImeService extends InputMethodService {
         compositionView.setContentDescription(privateField?"安全输入":"当前中文句子："+sentence);
         // The preview also exposes confirmed context when the pinyin row is collapsed.
         englishView.setContentDescription(privateField?"安全输入":"当前中文句子："+sentence);updatePanels();
+        if(translator!=null)translator.cancel();
         if(privateField||latin) {english="";translatedSource="";generation++;englishView.setText(privateField?"安全输入":"English · 直接输入");return;}
         String source=preview();generation++;int ticket=generation;
         if(translationWork!=null)handler.removeCallbacks(translationWork);
@@ -185,7 +186,7 @@ public final class FuyiImeService extends InputMethodService {
         if(source.isEmpty()){englishView.setText("中文输入 · 长按译文复制");return;}
         englishView.setText("正在翻译整句…");
         translationWork=() -> {
-            if(translator==null)translator=new LocalTranslator();
+            if(translator==null)translator=new LocalTranslator(this);
             translator.translate(source,(text,status) -> {
                 if(!active||privateField||ticket!=generation)return;
                 english=text;translatedSource=text.isEmpty()?"":source;

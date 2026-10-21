@@ -7,9 +7,10 @@ android {
         applicationId 'com.fuyi.keyboard'
         minSdk 26
         targetSdk 36
-        versionCode 4
-        versionName '0.1.3'
+        versionCode 5
+        versionName '0.1.4'
         testInstrumentationRunner 'android.test.InstrumentationTestRunner'
+        ndk { abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64', 'x86' }
     }
     compileOptions { coreLibraryDesugaringEnabled true; sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
     useLibrary 'android.test.runner'
@@ -17,10 +18,27 @@ android {
     useLibrary 'android.test.mock'
     testOptions.unitTests.all { systemProperty 'fuyi.dictionary', rootProject.file('../Resources/pinyin_simp.dict.yaml').absolutePath }
     sourceSets.main.assets.srcDirs += ['../../Resources']
-    androidResources { ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.icns:!*.tiff:!*.pdf:!RimeData:!*.lproj' }
+    androidResources { ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.icns:!*.tiff:!*.pdf:!RimeData:!*.lproj:!source.spm' }
 }
 dependencies {
-    implementation 'com.google.mlkit:translate:17.0.3'
+    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.23.2'
+    implementation 'com.microsoft.onnxruntime:onnxruntime-extensions-android:0.13.0'
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
     testImplementation 'junit:junit:4.13.2'
 }
+
+// Never silently ship an APK without its offline model. No automatic network fetch in Gradle.
+tasks.register('verifyBundledTranslation') {
+    doLast {
+        def dir=file('src/main/assets/translation')
+        def manifest=new groovy.json.JsonSlurper().parse(new File(dir,'manifest.json'))
+        manifest.files.each { entry ->
+            def model=new File(dir,entry.file)
+            if(!model.exists() || model.length()!=entry.bytes) throw new GradleException('Missing model: run tools/prepare_translation.py')
+            def digest=java.security.MessageDigest.getInstance('SHA-256')
+            model.withInputStream { stream -> byte[] buffer=new byte[65536]; int n; while((n=stream.read(buffer))>0) digest.update(buffer,0,n) }
+            if(digest.digest().encodeHex().toString()!=entry.sha256) throw new GradleException('Model checksum mismatch: '+entry.file)
+        }
+    }
+}
+tasks.named('preBuild').configure { dependsOn 'verifyBundledTranslation' }

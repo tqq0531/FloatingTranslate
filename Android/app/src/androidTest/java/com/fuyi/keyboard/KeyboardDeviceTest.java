@@ -91,11 +91,11 @@ public final class KeyboardDeviceTest extends InstrumentationTestCase {
         var context=getInstrumentation().getTargetContext();Options.prefs(context).edit().putBoolean("englishDefault",true).commit();
         try {
             type("nihao");AccessibilityNodeInfo result=null;
-            for(int i=0;i<50&&result==null;i++){result=find("Hello",false);if(result==null)Thread.sleep(100);}
+            for(int i=0;i<50&&result==null;i++){result=find("Hello.",false);if(result==null)Thread.sleep(100);}
             assertNotNull("Expected real English preview",result);
             assertTrue(result.performAction(AccessibilityNodeInfo.ACTION_LONG_CLICK));Thread.sleep(200);
             final String[] copied={""};getInstrumentation().runOnMainSync(()->{var clip=context.getSystemService(android.content.ClipboardManager.class).getPrimaryClip();if(clip!=null)copied[0]=clip.getItemAt(0).getText().toString();});
-            assertEquals("Hello",copied[0]);tap("空格");assertEquals("Hello",text());
+            assertEquals("Hello.",copied[0]);tap("空格");assertEquals("Hello.",text());
         } finally {Options.prefs(context).edit().putBoolean("englishDefault",false).commit();}
     }
     public void testPasswordFieldDisablesHistory()throws Exception {

@@ -1,0 +1,21 @@
+FloatingTranslate Android bundled translation model
+
+Base model: Helsinki-NLP/opus-mt-zh-en (OPUS-MT, Marian NMT)
+https://huggingface.co/Helsinki-NLP/opus-mt-zh-en
+Credit: Helsinki-NLP / Language Technology Research Group, University of Helsinki;
+Jörg Tiedemann and Santhosh Thottingal (OPUS-MT, EAMT 2020).
+License: Creative Commons Attribution 4.0 International (CC BY 4.0).
+Full terms: CC-BY-4.0.txt; source model card: OPUS-MT-MODEL-CARD.md.
+No endorsement by the model authors is implied.
+
+ONNX conversion and quantized weights: Xenova/opus-mt-zh-en
+https://huggingface.co/Xenova/opus-mt-zh-en
+Pinned revision: 39d480d52a9ea3065a1f117adfe4dbc55de10e6f
+FloatingTranslate modifications: packages the upstream int8 ONNX weights unchanged;
+exports a SentencePiece tokenizer graph and vocabulary ID map, and uses greedy
+CPU decoding (not the upstream beam-search default). Model not fine-tuned here.
+
+Inference: Microsoft ONNX Runtime 1.23.2, MIT License.
+Tokenization: Microsoft ONNX Runtime Extensions 0.13.0, MIT License.
+License texts are included in this directory. Runtime third-party notices are
+included by their upstream AARs where applicable.
