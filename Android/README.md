@@ -1,4 +1,4 @@
-# 浮译 Android · 0.1.1 试用版
+# 浮译 Android · 0.1.2 试用版
 
 原生安卓输入法，支持本地拼音候选、分段输入后的整句英文预览，以及保留 24 小时的文字剪贴板历史。
 
@@ -9,6 +9,14 @@
 3. 在试用输入框输入 `nihao`，按空格确认“你好”。通过底部“中/英 / EN”按钮切换直接英文；`123` 打开数字符号。
 4. 在应用设置通过 Wi-Fi 下载中英离线语言包。下载完成后，键盘上方显示本机英文译文，长按可复制整句。正文不会发到开发者服务器。
 5. 开启“保存剪贴板历史 · 24 小时”。在其他软件复制文字，回到任意普通文本框，点击键盘“剪贴板”，点某条历史即可插入；每条右侧“⋮”可以查看到期时间或删除，顶部“⋯”可以“清空”。关闭保存开关立即清空历史。
+
+## 语言包下载进度
+
+0.1.2 新增水平进度条，显示系统下载器实际返回的百分比、已下载 MB 和总大小。连接服务或总大小未知时显示等待动画；等待 Wi-Fi、网络恢复、重试和校验安装有独立提示。下载达到 100% 后仍需完成校验，只有翻译 SDK 确认成功才提示“已就绪”。
+
+下载期间关闭设置页再打开，可恢复正在进行的下载状态；不会重复创建应用自己的下载任务。失败后可点击重试。读取范围仅限本应用的中英模型下载，不新增存储权限。部分系统限制进度查询或 SDK 更改下载地址时，显示无法读取大小的等待状态，继续等待 SDK 结果，不编造百分比。
+
+[真实下载进度截图](docs/download.png)
 
 ## 键盘布局与手感
 
@@ -48,7 +56,7 @@ cd Android
 ./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
 # 已启动独立模拟器/连接专门测试机，并在该设备启用浮译后：
 ./gradlew :app:connectedDebugAndroidTest \
-  -Pandroid.testInstrumentationRunnerArguments.class=com.fuyi.keyboard.ClipboardDeviceTest,com.fuyi.keyboard.KeyboardDeviceTest
+  -Pandroid.testInstrumentationRunnerArguments.class=com.fuyi.keyboard.ClipboardDeviceTest,com.fuyi.keyboard.KeyboardDeviceTest,com.fuyi.keyboard.DownloadProgressDeviceTest
 # 单独验证模型下载和真实翻译（明确允许下载约 35 MB 模型）：
 ./gradlew :app:connectedDebugAndroidTest \
   -Pandroid.testInstrumentationRunnerArguments.class=com.fuyi.keyboard.TranslationModelDeviceTest \
@@ -71,3 +79,5 @@ APK：`app/build/outputs/apk/debug/app-debug.apk`。最低 Android 8.0 / API 26�
 - [敏感剪贴板标记](https://developer.android.com/develop/ui/views/touch-and-input/copy-paste#sensitive-content)
 - [ML Kit 本机翻译](https://developers.google.com/ml-kit/language/translation/android) 与 [隐私说明](https://developers.google.com/ml-kit/terms)
 - 拼音词库来源与 Apache 2.0 许可见仓库 `Resources/RIME-LICENSE.txt`。ML Kit 属独立第三方 SDK，按其条款使用。
+
+下载进度依据 [Android DownloadManager](https://developer.android.com/reference/android/app/DownloadManager) 的实际字节数；模型就绪依据 [ML Kit Translator](https://developers.google.com/android/reference/com/google/mlkit/nl/translate/Translator) 的下载任务结果。

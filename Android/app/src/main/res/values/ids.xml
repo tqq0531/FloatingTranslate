@@ -1,1 +1,1 @@
-<resources><item name="test_editor" type="id" /></resources>
+<resources><item name="test_editor" type="id" /><item name="download_status" type="id" /><item name="download_progress" type="id" /><item name="download_detail" type="id" /><item name="download_button" type="id" /></resources>
