@@ -1,0 +1,84 @@
+package com.fuyi.keyboard;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.Reader;
+import java.util.*;
+
+/** Fixed local dictionary; no user learning or input logging. Not the native Rime runtime. */
+public final class PinyinDictionary {
+    public record Candidate(String text, int consumed) { }
+    private record Word(String text, String code, double weight) { }
+    private final Map<String, List<Word>> full = new HashMap<>(), initials = new HashMap<>();
+    private int maxCode;
+    public PinyinDictionary(Reader input) throws IOException {
+        try (BufferedReader reader = new BufferedReader(input)) {
+            boolean body = false;
+            for (String line; (line = reader.readLine()) != null;) {
+                if (!body) { if (line.equals("...")) body = true; continue; }
+                String[] cells = line.split("\t");
+                if (cells.length < 2 || cells[0].isEmpty()) continue;
+                String[] syllables = cells[1].split(" +");
+                String code = cells[1].replace(" ", ""), shortCode = "";
+                for (String syllable : syllables) if (!syllable.isEmpty()) shortCode += syllable.charAt(0);
+                if (!code.matches("[a-z]+")) continue;
+                double weight = cells.length >= 3 ? Double.parseDouble(cells[2]) : 1;
+                Word word = new Word(cells[0], code, weight);
+                full.computeIfAbsent(code, k -> new ArrayList<>()).add(word);
+                if (syllables.length > 1) initials.computeIfAbsent(shortCode, k -> new ArrayList<>()).add(word);
+                maxCode = Math.max(maxCode, code.length());
+            }
+        }
+        Comparator<Word> order = Comparator.comparingDouble(Word::weight).reversed();
+        for (Map<String,List<Word>> index : List.of(full, initials)) for (List<Word> words : index.values()) words.sort(order);
+    }
+    private String clean(String raw) { return raw.toLowerCase(Locale.ROOT).replace("'", ""); }
+    private int consumed(String raw, int letters) {
+        int i = 0, n = 0;
+        while (i < raw.length() && n < letters) if (raw.charAt(i++) != '\'') n++;
+        while (i < raw.length() && raw.charAt(i) == '\'') i++;
+        return i;
+    }
+    public String complete(String raw) {
+        String code = clean(raw);
+        if (code.isEmpty() || code.length() > 80) return "";
+        List<Word> exact = full.get(code);
+        if (exact != null) return exact.get(0).text();
+        List<Word> abbr = initials.get(code);
+        if (abbr != null) return abbr.get(0).text();
+        double[] scores = new double[code.length()+1]; Arrays.fill(scores, Double.NEGATIVE_INFINITY); scores[0] = 0;
+        String[] text = new String[code.length()+1]; text[0] = "";
+        for (int end = 1; end <= code.length(); end++) for (int start = Math.max(0, end-maxCode); start < end; start++) {
+            if (text[start] == null) continue;
+            String syllable = code.substring(start,end);
+            if (List.of("m", "n", "ng", "hm", "hng").contains(syllable)) continue;
+            List<Word> words = full.get(syllable);
+            if (words == null) continue;
+            Word word = words.get(0);
+            double score = scores[start] + Math.log1p(word.weight()) + 4*word.text().length() - 14;
+            if (score > scores[end]) { scores[end] = score; text[end] = text[start] + word.text(); }
+        }
+        return text[code.length()] == null ? "" : text[code.length()];
+    }
+    public List<Candidate> candidates(String raw) {
+        String code = clean(raw); if (code.isEmpty()) return List.of();
+        LinkedHashMap<String,Candidate> result = new LinkedHashMap<>();
+        String sentence = complete(raw);
+        if (!sentence.isEmpty()) result.put(sentence,new Candidate(sentence,raw.length()));
+        add(result,full.get(code),raw.length());
+        add(result,initials.get(code),raw.length());
+        if (result.isEmpty()) {
+            // A common accidental adjacent-letter swap, preserving original keystroke consumption.
+            for (int i=0; i+1<code.length(); i++) {
+                char[] swapped = code.toCharArray(); char c=swapped[i]; swapped[i]=swapped[i+1]; swapped[i+1]=c;
+                add(result,full.get(new String(swapped)),raw.length());
+            }
+        }
+        for (int len=Math.min(maxCode,code.length()-1); len>0 && result.size()<20; len--) add(result,full.get(code.substring(0,len)),consumed(raw,len));
+        return new ArrayList<>(result.values()).subList(0, Math.min(result.size(),20));
+    }
+    private void add(Map<String,Candidate> result,List<Word> words,int consumed) {
+        if (words == null) return;
+        for (Word word:words) { result.putIfAbsent(word.text(),new Candidate(word.text(),consumed)); if (result.size()>=20) break; }
+    }
+}

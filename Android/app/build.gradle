@@ -1,0 +1,26 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'com.fuyi.keyboard'
+    compileSdk 36
+    buildToolsVersion '36.1.0'
+    defaultConfig {
+        applicationId 'com.fuyi.keyboard'
+        minSdk 26
+        targetSdk 36
+        versionCode 1
+        versionName '0.1.0'
+        testInstrumentationRunner 'android.test.InstrumentationTestRunner'
+    }
+    compileOptions { coreLibraryDesugaringEnabled true; sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+    useLibrary 'android.test.runner'
+    useLibrary 'android.test.base'
+    useLibrary 'android.test.mock'
+    testOptions.unitTests.all { systemProperty 'fuyi.dictionary', rootProject.file('../Resources/pinyin_simp.dict.yaml').absolutePath }
+    sourceSets.main.assets.srcDirs += ['../../Resources']
+    androidResources { ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.icns:!*.tiff:!*.pdf:!RimeData:!*.lproj' }
+}
+dependencies {
+    implementation 'com.google.mlkit:translate:17.0.3'
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
+    testImplementation 'junit:junit:4.13.2'
+}

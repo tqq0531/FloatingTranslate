@@ -1,5 +1,7 @@
 # 浮译 · Mac 本地试用版
 
+安卓手机版本位于 [Android/](Android/README.md)，提供原生键盘、整句英文预览和保留 24 小时的本地加密剪贴板历史。安卓端使用独立的翻译 SDK，网络与隐私边界请以安卓文档为准。
+
 输入中文拼音时，在候选词旁显示英文句子；可选默认输出中文或英文译文。当前版本为 **0.5.11 本地试用版**。
 
 [下载安装包](https://github.com/tqq0531/FloatingTranslate/releases) · [隐私与密码输入说明](docs/PRIVACY.md) · [兼容性与验收记录](docs/COMPATIBILITY.md)

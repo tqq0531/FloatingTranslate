@@ -1,0 +1,14 @@
+<resources>
+    <string name="ime_name">浮译 · 中文 / English</string>
+    <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item><item name="android:colorAccent">#2962FF</item>
+        <item name="android:windowLightStatusBar">true</item><item name="android:statusBarColor">#F4F6FB</item>
+        <item name="android:navigationBarColor">#F4F6FB</item><item name="android:windowActionModeOverlay">true</item>
+    </style>
+    <style name="BaseImeTheme" parent="android:style/Theme.InputMethod">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#2962FF</item>
+        <item name="android:navigationBarColor">#F4F6FB</item>
+    </style>
+    <style name="ImeTheme" parent="BaseImeTheme" />
+</resources>

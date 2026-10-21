@@ -1,0 +1,3 @@
+<input-method xmlns:android="http://schemas.android.com/apk/res/android" android:settingsActivity="com.fuyi.keyboard.MainActivity" android:supportsSwitchingToNextInputMethod="true">
+    <subtype android:imeSubtypeLocale="zh_CN" android:imeSubtypeMode="keyboard" android:label="@string/ime_name" />
+</input-method>
