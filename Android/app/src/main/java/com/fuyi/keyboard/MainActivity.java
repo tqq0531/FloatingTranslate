@@ -23,7 +23,7 @@ public final class MainActivity extends Activity {
         body=Ui.column(this);body.setPadding(Ui.dp(this,24),Ui.dp(this,20),Ui.dp(this,24),Ui.dp(this,24));body.setBackgroundColor(Ui.BG);
         scroll.setOnApplyWindowInsetsListener((v,insets) -> {int top, bottom; if(android.os.Build.VERSION.SDK_INT>=30){var bars=insets.getInsets(WindowInsets.Type.systemBars());top=bars.top;bottom=bars.bottom;}else{top=insets.getSystemWindowInsetTop();bottom=insets.getSystemWindowInsetBottom();}v.setPadding(0,top,0,bottom);return insets;});
         scroll.addView(body);setContentView(scroll);
-        add("浮译",32,Ui.INK);add("ANDROID · 0.1.0 本地试用版",12,Ui.BLUE);
+        add("浮译",32,Ui.INK);add("ANDROID · 0.1.1 本地试用版",12,Ui.BLUE);
         add("输入中文，看见整句英文",20,Ui.INK);
         add("拼音选词、English 直接输入，以及只保存 24 小时的复制历史。",14,Ui.MUTED);
         body.addView(Ui.button(this,"1  启用浮译键盘",() -> startActivity(new Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))));

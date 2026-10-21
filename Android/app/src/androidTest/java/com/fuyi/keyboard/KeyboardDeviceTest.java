@@ -26,13 +26,15 @@ public final class KeyboardDeviceTest extends InstrumentationTestCase {
     private void tap(String label,boolean description) throws Exception {
         AccessibilityNodeInfo node=null;
         for(int i=0;i<15&&node==null;i++){node=find(label,description);if(node==null)Thread.sleep(100);}
-        assertNotNull("Missing key: "+label,node);assertTrue("Click: "+label,node.performAction(AccessibilityNodeInfo.ACTION_CLICK));Thread.sleep(120);
+        assertNotNull("Missing key: "+label,node);boolean clicked=node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+        for(var parent=node.getParent();!clicked&&parent!=null;parent=parent.getParent())clicked=parent.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+        assertTrue("Click: "+label,clicked);Thread.sleep(200);
     }
     private void screenshot(String name)throws Exception {
         var bitmap=getInstrumentation().getUiAutomation().takeScreenshot();
         assertNotNull(bitmap);try(var out=new java.io.FileOutputStream(new java.io.File(getInstrumentation().getTargetContext().getExternalFilesDir(null),name))) {bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);}bitmap.recycle();
     }
-    private void type(String s)throws Exception {for(char c:s.toCharArray())tap(String.valueOf(c));}
+    private void type(String s)throws Exception {for(char c:s.toCharArray())tap("按键 "+c,true);}
     private String text(){final String[] value={""};getInstrumentation().runOnMainSync(()->value[0]=editor.getText().toString());return value[0];}
     @Override protected void setUp()throws Exception {
         super.setUp();var info=getInstrumentation().getUiAutomation().getServiceInfo();info.flags|=AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;getInstrumentation().getUiAutomation().setServiceInfo(info);
@@ -49,14 +51,40 @@ public final class KeyboardDeviceTest extends InstrumentationTestCase {
         assertEquals("我今天去北京",text());
         assertNotNull("Committed words must stay in whole-sentence context",find("当前中文句子：我今天去北京",true));
         Thread.sleep(1200);screenshot("keyboard.png");
-        tap("中 · 拼音");type("abc");assertEquals("我今天去北京abc",text());
+        tap("切换中英文：中文拼音",true);type("abc");assertEquals("我今天去北京abc",text());
         var context=getInstrumentation().getTargetContext();Options.history(context,true);
         ClipboardStore store=new ClipboardStore(context);store.clear();store.add("先前复制的内容",System.currentTimeMillis()-3600000);store.add("另一条",System.currentTimeMillis());
         tap("剪贴板");tap("插入历史：先前复制的内容",true);
         assertEquals("我今天去北京abc先前复制的内容",text());
         assertEquals(2,store.list().size());screenshot("clipboard.png");
-        tap("清空");assertTrue(store.list().isEmpty());
+        tap("记录操作：另一条",true);tap("删除");assertEquals(1,store.list().size());
+        tap("剪贴板操作",true);tap("清空");assertTrue(store.list().isEmpty());
         Options.history(context,false);
+    }
+    private void touch(android.graphics.Rect rect,boolean hold,boolean edge)throws Exception {
+        long time=android.os.SystemClock.uptimeMillis();float x=edge?rect.left+1:rect.exactCenterX(),y=rect.exactCenterY();
+        var down=android.view.MotionEvent.obtain(time,time,android.view.MotionEvent.ACTION_DOWN,x,y,0);down.setSource(android.view.InputDevice.SOURCE_TOUCHSCREEN);
+        assertTrue(getInstrumentation().getUiAutomation().injectInputEvent(down,true));down.recycle();if(hold)Thread.sleep(850);
+        var up=android.view.MotionEvent.obtain(time,android.os.SystemClock.uptimeMillis(),android.view.MotionEvent.ACTION_UP,x,y,0);up.setSource(android.view.InputDevice.SOURCE_TOUCHSCREEN);
+        assertTrue(getInstrumentation().getUiAutomation().injectInputEvent(up,true));up.recycle();Thread.sleep(200);
+    }
+    private android.graphics.Rect bounds(String description){var node=find(description,true);assertNotNull(description,node);var rect=new android.graphics.Rect();node.getBoundsInScreen(rect);return rect;}
+    public void testStaggeredKeysTouchGuttersRepeatAndPanels()throws Exception {
+        screenshot("layout.png");
+        var q=bounds("按键 q");var a=bounds("按键 a");var z=bounds("按键 z");
+        assertTrue("Second row must be indented",a.centerX()>q.centerX());
+        assertTrue("Third row must leave room for Shift",z.centerX()>a.centerX());
+        assertTrue(bounds("大写").centerX()<z.centerX());assertTrue(bounds("退格").centerX()>bounds("按键 m").centerX());
+        tap("切换中英文：中文拼音",true);type("abcde");touch(bounds("退格"),true,false);assertEquals("",text());
+        touch(bounds("按键 a"),false,true);assertEquals("a",text());
+        tap("大写",true);tap("按键 A",true);assertEquals("aA",text());assertNotNull(find("按键 a",true));
+        tap("数字与符号",true);tap("按键 1",true);tap("数字与符号",true);assertNotNull(find("按键 a",true));
+        tap("表情键盘",true);tap("表情 👍",true);tap("数字与符号",true);assertNotNull(find("按键 a",true));assertEquals("aA1👍",text());
+    }
+    public void testSendKeyUsesEditorAction()throws Exception {
+        final int[] received={0};
+        getInstrumentation().runOnMainSync(()->{editor.setSingleLine(true);editor.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEND);editor.setOnEditorActionListener((view,action,event)->{received[0]=action;return true;});activity.getSystemService(InputMethodManager.class).restartInput(editor);});
+        Thread.sleep(500);tap("执行：发送",true);assertEquals(android.view.inputmethod.EditorInfo.IME_ACTION_SEND,received[0]);
     }
     public void testPreparedModelEnglishDefaultAndCopy()throws Exception {
         if(!"true".equals(((android.test.InstrumentationTestRunner)getInstrumentation()).getArguments().getString("preparedModel"))) return;
@@ -72,7 +100,7 @@ public final class KeyboardDeviceTest extends InstrumentationTestCase {
     }
     public void testPasswordFieldDisablesHistory()throws Exception {
         getInstrumentation().runOnMainSync(()->{editor.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);activity.getSystemService(InputMethodManager.class).restartInput(editor);});
-        Thread.sleep(500);assertNotNull(find("安全输入",false));
+        Thread.sleep(500);assertNotNull(find("安全输入",true));
         var clipboard=find("剪贴板",false);assertNotNull(clipboard);assertFalse(clipboard.isEnabled());
         type("abc");assertEquals("abc",text());
     }
