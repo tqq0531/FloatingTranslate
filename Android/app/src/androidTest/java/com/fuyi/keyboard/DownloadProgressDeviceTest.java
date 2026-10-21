@@ -28,7 +28,7 @@ public final class DownloadProgressDeviceTest extends InstrumentationTestCase {
             final int previous=first;boolean resumed=false;
             for(int i=0;i<100&&!resumed;i++){final boolean[] ok={false};getInstrumentation().runOnMainSync(()->{ProgressBar bar=activity[0].findViewById(R.id.download_progress);ok[0]=!bar.isIndeterminate()&&bar.getProgress()>=previous;});resumed=ok[0];if(!resumed)Thread.sleep(100);}
             assertTrue("Reopened page must recover existing transfer",resumed);
-            getInstrumentation().runOnMainSync(()->{activity[0].getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);var bar=(ProgressBar)activity[0].findViewById(R.id.download_progress);((android.widget.ScrollView)bar.getParent().getParent()).scrollTo(0,Math.max(0,bar.getTop()-250));});Thread.sleep(400);
+            getInstrumentation().runOnMainSync(()->{activity[0].getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);var bar=(ProgressBar)activity[0].findViewById(R.id.download_progress);var scroll=(android.widget.ScrollView)activity[0].findViewById(R.id.settings_scroll);var rect=new android.graphics.Rect();bar.getDrawingRect(rect);scroll.offsetDescendantRectToMyCoords(bar,rect);scroll.scrollTo(0,Math.max(0,rect.top-250));});Thread.sleep(400);
             var bitmap=getInstrumentation().getUiAutomation().takeScreenshot();assertNotNull(bitmap);
             try(var out=new java.io.FileOutputStream(new java.io.File(getInstrumentation().getTargetContext().getExternalFilesDir(null),"download.png"))){bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);}bitmap.recycle();
         }finally{getInstrumentation().runOnMainSync(activity[0]::finish);}

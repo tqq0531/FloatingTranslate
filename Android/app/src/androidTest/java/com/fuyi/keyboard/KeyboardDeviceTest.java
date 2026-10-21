@@ -44,7 +44,7 @@ public final class KeyboardDeviceTest extends InstrumentationTestCase {
         getInstrumentation().waitForIdleSync();Thread.sleep(500);
         getInstrumentation().runOnMainSync(()->{editor.requestRectangleOnScreen(new android.graphics.Rect(0,0,editor.getWidth(),editor.getHeight()),true);activity.getSystemService(InputMethodManager.class).showSoftInput(editor,InputMethodManager.SHOW_IMPLICIT);});
         Thread.sleep(1200);
-        getInstrumentation().runOnMainSync(()->((android.widget.ScrollView)editor.getParent().getParent()).scrollTo(0,Math.max(0,editor.getTop()-32)));
+        getInstrumentation().runOnMainSync(()->{var scroll=(android.widget.ScrollView)activity.findViewById(R.id.settings_scroll);var rect=new android.graphics.Rect();editor.getDrawingRect(rect);scroll.offsetDescendantRectToMyCoords(editor,rect);scroll.scrollTo(0,Math.max(0,rect.top-24));});
     }
     public void testRealSoftKeyboardChineseEnglishAndHistoryInsertion()throws Exception {
         type("wo");tap("空格");type("jintian");tap("空格");type("qubeijing");tap("空格");

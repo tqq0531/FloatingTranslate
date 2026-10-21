@@ -1,14 +1,20 @@
-# 浮译 Android · 0.1.2 试用版
+# 浮译 Android · 0.1.3 试用版
 
 原生安卓输入法，支持本地拼音候选、分段输入后的整句英文预览，以及保留 24 小时的文字剪贴板历史。
 
 ## 安装和使用
 
 1. 安装 APK，打开“浮译”。试用 APK 使用开发签名，尚未上架应用商店。
-2. 点击“启用浮译键盘”，在系统设置启用；再点“切换到浮译”。Android 会展示所有第三方键盘的标准风险提示。
+2. 点击“启用键盘”，在系统设置启用；再点“切换输入法”。Android 会展示所有第三方键盘的标准风险提示。
 3. 在试用输入框输入 `nihao`，按空格确认“你好”。通过底部“中/英 / EN”按钮切换直接英文；`123` 打开数字符号。
 4. 在应用设置通过 Wi-Fi 下载中英离线语言包。下载完成后，键盘上方显示本机英文译文，长按可复制整句。正文不会发到开发者服务器。
-5. 开启“保存剪贴板历史 · 24 小时”。在其他软件复制文字，回到任意普通文本框，点击键盘“剪贴板”，点某条历史即可插入；每条右侧“⋮”可以查看到期时间或删除，顶部“⋯”可以“清空”。关闭保存开关立即清空历史。
+5. 开启“复制历史”。在其他软件复制文字，回到任意普通文本框，点击键盘“剪贴板”，点某条历史即可插入；每条右侧“⋮”可以查看到期时间或删除，顶部“⋯”可以“清空”。关闭保存开关立即清空历史。
+
+## 设置界面
+
+0.1.3 重做设置页：深蓝引导区、白色卡片、统一按钮和开关，按输入偏好、本机翻译、试用和隐私分组。完整隐私说明可展开；网络边界与敏感输入建议直接展示。已安装的语言包会显示“已就绪”，正在下载时保留实际进度。
+
+[设置首页](docs/settings-home.png) · [翻译、试用与隐私](docs/settings-details.png) · [窄屏与大字号](docs/settings-large-text.png)
 
 ## 语言包下载进度
 
@@ -56,7 +62,7 @@ cd Android
 ./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
 # 已启动独立模拟器/连接专门测试机，并在该设备启用浮译后：
 ./gradlew :app:connectedDebugAndroidTest \
-  -Pandroid.testInstrumentationRunnerArguments.class=com.fuyi.keyboard.ClipboardDeviceTest,com.fuyi.keyboard.KeyboardDeviceTest,com.fuyi.keyboard.DownloadProgressDeviceTest
+  -Pandroid.testInstrumentationRunnerArguments.class=com.fuyi.keyboard.ClipboardDeviceTest,com.fuyi.keyboard.KeyboardDeviceTest,com.fuyi.keyboard.DownloadProgressDeviceTest,com.fuyi.keyboard.SettingsDeviceTest
 # 单独验证模型下载和真实翻译（明确允许下载约 35 MB 模型）：
 ./gradlew :app:connectedDebugAndroidTest \
   -Pandroid.testInstrumentationRunnerArguments.class=com.fuyi.keyboard.TranslationModelDeviceTest \
