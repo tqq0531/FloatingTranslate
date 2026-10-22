@@ -1,6 +1,19 @@
-# 浮译 Windows · 0.1.0 开发试用版
+# 浮译 Windows · 0.1.1 开发试用版
 
 Windows 原生 TSF 输入法，中文拼音使用与 Mac 相同的 Rime 1.17.0 词库和方案，中文 → 英文使用完整内置的 OPUS-MT / ONNX 本地模型。
+
+
+## 0.1.1 修复 / Fixes
+
+- 浮窗按内容宽度自适应，只有译文时收为一行小卡片；取消重复拼音行，采用紧凑灰色圆角、蓝色选词和复制图标。
+- 候选按实际文字宽度排布，长词换行完整显示，不加省略号。整窗超过屏幕高度时可用滚轮或右侧细条查看，翻译也不截断为省略号。
+- 修正 TSF 范围端点随新组合文字移动、以及宿主重复编辑通知导致整句清空的问题。临时不可用的范围保留本次输入的内存上下文，但不允许凭不可靠范围替换文档；确实移动光标、修改已跟踪文字、切换输入框或超时仍清理。
+
+The popup now sizes to its content, with a compact translation-only card, a rounded neutral background, blue candidate selection and a copy icon. The duplicate Pinyin row is removed. Candidates use measured widths and wrap without ellipses; overflowing content can be scrolled. TSF endpoint gravity and repeated host edit notifications no longer discard the sentence merely because a range is temporarily unavailable. Unreliable ranges disable automatic replacement; confirmed movement, tracked-text edits, focus changes and expiry still clear context.
+
+外观与交互以 Mac 版为参照；Windows 使用不同的原生绘制和翻译引擎，不承诺像素或译文完全相同。新版已通过核心逻辑与布局检查、x64 交叉编译及完整性审计；Windows 微信宿主复测待完成。
+
+The presentation follows the Mac version. Native rendering and translation engines differ, so pixels and translations can differ. Core/layout checks, x64 cross-compilation and package audits are covered; actual Windows WeChat retesting remains pending.
 
 ## 解压与启用
 

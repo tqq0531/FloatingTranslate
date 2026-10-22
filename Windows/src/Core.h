@@ -9,6 +9,11 @@ struct Candidate {
     std::wstring text;
     size_t consumed = 0;
 };
+// An unavailable TSF range is not evidence that the user moved the caret.
+enum class RangeEvidence { Unknown, Matches, Different };
+inline bool breaksSentence(RangeEvidence caret, RangeEvidence prefix) {
+    return caret == RangeEvidence::Different || prefix == RangeEvidence::Different;
+}
 struct Sentence {
     std::wstring text;
     uint64_t touched = 0;

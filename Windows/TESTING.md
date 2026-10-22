@@ -1,6 +1,22 @@
-# Windows 0.1.0 测试边界与验收清单
+# Windows 0.1.1 测试边界与验收清单
 
-日期：2026-10-21。当前开发主机为 macOS / Apple Silicon，交叉编译 Windows x64。**尚未在真实 Windows 系统完成输入服务与宿主应用验收。** 此包供指定测试人员试用，不应按“与 Mac 一样成熟稳定”对外宣传。
+日期：2026-10-22。当前开发主机为 macOS / Apple Silicon，交叉编译 Windows x64。**尚未在真实 Windows 系统完成输入服务与宿主应用验收。** 此包供指定测试人员试用，不应按“与 Mac 一样成熟稳定”对外宣传。
+
+
+## 0.1.1 回归 / Regression checks
+
+- 核心测试加入“你好 / 今天 / 健身 / 了吗”的内存上下文与连续宿主通知策略；临时未知范围不等于已移动光标，已确认范围变化必须清理。TSF 分支的真实宿主行为仍需 Windows 复测，此测试不能替代微信输入验收。
+- 同一份原生浮窗布局代码检查 100%、125%、150%、200%、250% DPI：短译文小卡片、紧凑候选、长句换行、超长候选全部字符保留、可滚动高度和屏幕宽度约束。
+- 新增固定离线自检句“你好今天健身了吗？”。Windows 自检实际输出由测试者在“检查离线组件.cmd”中查看，不将交叉编译当作 Windows 推理结果。
+
+Shared core/layout regressions cover retained sentence context, unavailable-versus-moved range evidence, compact cards, complete wrapped candidates and bounded scrolling at five DPI settings. These are not actual TSF host tests. The offline component checker includes the reported workout sentence.
+
+### Windows 微信复测 / Windows WeChat retest
+
+1. 在同一输入框依次输入并确认 `nihao`、`jintian`、`jianshen`、`lema`，观察翻译随整句更新，而不是依次只剩 Hello、Today、Physical fitness。
+2. 一次输入 `nihaojintianjianshenlema`，确认首候选完整显示；再试较长候选与屏幕右/下边缘。
+3. 移动光标、选中文字、撤销、清空/发送消息后再输入，不应把上一句拼入下一句或替换无关正文。范围不可验证时应要求复制英文。
+4. 在 125%、150%、200% 缩放下检查短句浮窗宽度、透明圆角、复制图标与长文本滚动。译文可拖选后 Ctrl+C，候选换行后鼠标点击应选中对应编号。
 
 ## 已完成的检查
 

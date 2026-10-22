@@ -209,6 +209,7 @@ class TextService : public ITfTextInputProcessorEx,
          expectEdit_ = false, layoutPending_ = false, editFailed_ = false, wroteText_ = false;
     uint64_t revision_ = 0;
     DWORD flags_ = 0;
+    unsigned ownEditDepth_ = 0;
     static LRESULT CALLBACK proc(HWND w, UINT message, WPARAM a, LPARAM b) {
         auto self = (TextService *)GetWindowLongPtrW(w, GWLP_USERDATA);
         if (message == WM_NCCREATE) {
@@ -272,6 +273,11 @@ class TextService : public ITfTextInputProcessorEx,
         auto guarded = [this, expected, action = std::move(action)](TfEditCookie ec) {
             if (context_ != expected || !active_)
                 return E_ABORT;
+            struct Depth {
+                unsigned &value;
+                explicit Depth(unsigned &v) : value(v) { ++value; }
+                ~Depth() { --value; }
+            } depth(ownEditDepth_);
             return action(ec);
         };
         auto session = new EditSession(unknown(), context_, std::move(guarded));
@@ -415,19 +421,68 @@ class TextService : public ITfTextInputProcessorEx,
     bool composing() const {
         return !raw_.empty() || !locked_.empty();
     }
-    bool selectionAtEnd(TfEditCookie ec, ITfRange *range) {
-        if (!range)
-            return false;
+    RangeEvidence selectionEvidence(TfEditCookie ec, ITfRange *range) {
+        if (!range) return RangeEvidence::Unknown;
+        BOOL invalidated = FALSE;
+        if (range == sentenceRange_ && !sentence_.text.empty() &&
+            SUCCEEDED(range->IsEmpty(ec, &invalidated)) && invalidated)
+            return RangeEvidence::Unknown;
         TF_SELECTION sel{};
         ULONG count = 0;
-        if (FAILED(context_->GetSelection(ec, TF_DEFAULT_SELECTION, 1, &sel, &count)) || !count)
-            return false;
+        if (FAILED(context_->GetSelection(ec, TF_DEFAULT_SELECTION, 1, &sel, &count)) || !count || !sel.range)
+            return RangeEvidence::Unknown;
         BOOL empty = FALSE;
         LONG diff = 1;
-        bool valid = SUCCEEDED(sel.range->IsEmpty(ec, &empty)) && empty &&
-                     SUCCEEDED(range->CompareEnd(ec, sel.range, TF_ANCHOR_START, &diff)) && diff == 0;
+        auto evidence = RangeEvidence::Unknown;
+        if (SUCCEEDED(sel.range->IsEmpty(ec, &empty))) {
+            if (!empty) evidence = RangeEvidence::Different;
+            else if (SUCCEEDED(range->CompareEnd(ec, sel.range, TF_ANCHOR_START, &diff)))
+                evidence = diff == 0 ? RangeEvidence::Matches : RangeEvidence::Different;
+        }
         sel.range->Release();
-        return valid;
+        return evidence;
+    }
+    bool selectionAtEnd(TfEditCookie ec, ITfRange *range) {
+        return selectionEvidence(ec, range) == RangeEvidence::Matches;
+    }
+    RangeEvidence rangeTextEvidence(TfEditCookie ec, ITfRange *range, const std::wstring &expected) {
+        if (!range) return RangeEvidence::Unknown;
+        std::vector<wchar_t> buffer(expected.size() + 1);
+        ULONG count = 0;
+        if (FAILED(range->GetText(ec, 0, buffer.data(), (ULONG)buffer.size(), &count)))
+            return RangeEvidence::Unknown;
+        // Some rich-edit bridges invalidate their ranges at EndComposition. This
+        // disables replacement, not the memory-only preview of our own sentence.
+        if (!count && !expected.empty()) return RangeEvidence::Unknown;
+        return std::wstring(buffer.data(), count) == expected ? RangeEvidence::Matches : RangeEvidence::Different;
+    }
+    RangeEvidence prefixEvidence(TfEditCookie ec) {
+        if (sentence_.text.empty()) return RangeEvidence::Matches;
+        if (!sentenceRange_) return RangeEvidence::Unknown;
+        ITfRange *prefix = nullptr, *current = nullptr;
+        if (FAILED(sentenceRange_->Clone(&prefix))) return RangeEvidence::Unknown;
+        BOOL empty = FALSE;
+        if (SUCCEEDED(prefix->IsEmpty(ec, &empty)) && empty) {
+            release(prefix); return RangeEvidence::Unknown;
+        }
+        if (composition_ && SUCCEEDED(composition_->GetRange(&current))) {
+            LONG diff = 0;
+            if (FAILED(prefix->CompareEnd(ec, current, TF_ANCHOR_START, &diff))) {
+                release(current); release(prefix); return RangeEvidence::Unknown;
+            }
+            if (diff < 0) {
+                release(current); release(prefix); return RangeEvidence::Different;
+            }
+            // Only trim an overlapping owned range; never extend it to read
+            // unrelated document text between an old range and a moved caret.
+            if (diff > 0 && FAILED(prefix->ShiftEndToRange(ec, current, TF_ANCHOR_START))) {
+                release(current); release(prefix); return RangeEvidence::Unknown;
+            }
+        }
+        release(current);
+        auto result = rangeTextEvidence(ec, prefix, sentence_.text);
+        release(prefix);
+        return result;
     }
     HRESULT ensureComposition(TfEditCookie ec) {
         if (composition_)
@@ -623,23 +678,29 @@ class TextService : public ITfTextInputProcessorEx,
         auto text = (part ? *part : locked_ + wide(raw_)) + suffix;
         if (text.empty())
             return;
+        if (prefixEvidence(ec) == RangeEvidence::Different) {
+            sentence_.clear(); release(sentenceRange_);
+        }
         auto range = commitText(ec, text);
         if (!range) {
             status_ = L"当前应用暂不接受输入";
             draw();
             return;
         }
+        // TSF anchors move when text is inserted at their boundary. A failed
+        // post-commit comparison must not discard already committed words.
+        bool hadPrefix = !sentence_.text.empty();
         if (sentenceRange_) {
-            LONG diff = 1;
-            if (FAILED(sentenceRange_->CompareEnd(ec, range, TF_ANCHOR_START, &diff)) || diff != 0) {
-                sentence_.clear();
-                release(sentenceRange_);
-            }
+            LONG diff = 0;
+            if (SUCCEEDED(sentenceRange_->CompareEnd(ec, range, TF_ANCHOR_START, &diff)) && diff == 0) {
+                if (FAILED(sentenceRange_->ShiftEndToRange(ec, range, TF_ANCHOR_END)))
+                    release(sentenceRange_);
+            } else release(sentenceRange_);
         }
-        if (!sentenceRange_)
+        if (!sentenceRange_ && !hadPrefix)
             range->Clone(&sentenceRange_);
-        else
-            sentenceRange_->ShiftEndToRange(ec, range, TF_ANCHOR_END);
+        if (sentenceRange_)
+            sentenceRange_->SetGravity(ec, TF_GRAVITY_FORWARD, TF_GRAVITY_BACKWARD);
         range->Release();
         sentence_.append(text, GetTickCount64());
         raw_.clear();
@@ -665,7 +726,8 @@ class TextService : public ITfTextInputProcessorEx,
             ITfRange *compositionRange = nullptr;
             ITfRange *span = nullptr;
             LONG diff = 1;
-            if (!sentenceRange_ || !composition_ || FAILED(composition_->GetRange(&compositionRange)) ||
+            if (prefixEvidence(ec) != RangeEvidence::Matches || !sentenceRange_ || !composition_ ||
+                FAILED(composition_->GetRange(&compositionRange)) ||
                 FAILED(sentenceRange_->CompareEnd(ec, compositionRange, TF_ANCHOR_START, &diff)) || diff ||
                 !selectionAtEnd(ec, compositionRange) || FAILED(sentenceRange_->Clone(&span))) {
                 release(compositionRange);
@@ -766,7 +828,7 @@ class TextService : public ITfTextInputProcessorEx,
             release(sentenceRange_);
         }
         if (!composing() && !sentence_.text.empty() && sentenceRange_ &&
-            !selectionAtEnd(ec, sentenceRange_)) {
+            selectionEvidence(ec, sentenceRange_) == RangeEvidence::Different) {
             clear();
         }
         sentence_.touched = GetTickCount64();
@@ -814,9 +876,8 @@ class TextService : public ITfTextInputProcessorEx,
         if (code == VK_SPACE) {
             if (!composing()) {
                 if (!sentence_.text.empty()) {
-                    sentence_.append(L" ", GetTickCount64());
-                    expectEdit_ = true;
-                    translate();
+                    chinese(ec, L" ");
+                    return true;
                 }
                 return false;
             }
@@ -856,6 +917,10 @@ class TextService : public ITfTextInputProcessorEx,
             if (raw_.size() >= 100 || locked_.size() >= 500) {
                 MessageBeep(MB_OK);
                 return true;
+            }
+            if (sentence_.finished) {
+                sentence_.clear();
+                release(sentenceRange_);
             }
             sentence_.begin(GetTickCount64());
             raw_ += (char)(code - 'A' + 'a');
@@ -1224,16 +1289,21 @@ class TextService : public ITfTextInputProcessorEx,
                 }
                 ranges->Release();
             }
-            if (changed && !expectEdit_) {
-                clear();
-                return S_OK;
+            if (ownEditDepth_) return S_OK;
+            // Hosts may send several text/selection notifications for one IME
+            // write. Validate our bounded range instead of clearing on the second.
+            auto prefix = prefixEvidence(ec);
+            ITfRange *current = nullptr;
+            if (composition_) composition_->GetRange(&current);
+            auto caret = selectionEvidence(ec, current ? current : sentenceRange_);
+            auto markedText = current ? rangeTextEvidence(ec, current, locked_ + wide(raw_)) : RangeEvidence::Matches;
+            release(current);
+            if (breaksSentence(caret, prefix) || (changed && markedText == RangeEvidence::Different)) {
+                clear(); return S_OK;
             }
-            if (changed)
-                expectEdit_ = false;
-            if (!composing() && sentenceRange_ && !selectionAtEnd(ec, sentenceRange_)) {
-                clear();
-                return S_OK;
-            }
+            if (changed && !expectEdit_ && prefix == RangeEvidence::Unknown)
+                release(sentenceRange_); // copy preview remains; automatic replacement is unsafe
+            if (changed) expectEdit_ = false;
             if (composing() || !sentence_.text.empty())
                 geometry(ec);
         } catch (...) {

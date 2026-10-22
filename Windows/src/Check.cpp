@@ -28,7 +28,7 @@ int wmain() {
             std::cout << pair.first << " -> " << utf8(found->text) << "\n";
         }
         Translator engine;
-        for (auto text : {L"你好", L"我今天去北京。", L"为什么不一起翻译了？"}) {
+        for (auto text : {L"你好", L"我今天去北京。", L"为什么不一起翻译了？", L"你好今天健身了吗？"}) {
             auto result = engine.translate(text, [] { return false; });
             if (result.empty())
                 throw std::runtime_error("Translation missing");

@@ -1,22 +1,20 @@
 #pragma once
 #include "Core.h"
+#include "PanelLayout.h"
 #include "WinUtil.h"
 #include <windowsx.h>
 namespace fuyi {
 class Panel {
     HWND window_ = nullptr;
-    HFONT font_ = nullptr, small_ = nullptr;
-    int scale_ = 96, width_ = 580, height_ = 120;
+    HFONT font_ = nullptr, small_ = nullptr, candidateFont_ = nullptr;
+    int scale_ = 96, width_ = 160, height_ = 44, scroll_ = 0;
+    PanelLayout layout_;
     std::wstring english_, status_, raw_;
     std::vector<Candidate> candidates_;
     size_t selected_ = 0, selA_ = 0, selB_ = 0;
     bool dragging_ = false;
-    struct Line {
-        size_t start, length;
-        RECT rect;
-    };
-    std::vector<Line> lines_;
-    RECT copy_{}, choices_{};
+    std::vector<TextLine> lines_;
+    RECT copy_{};
     int d(int value) const {
         return MulDiv(value, scale_, 96);
     }
@@ -35,51 +33,37 @@ class Panel {
         if (small_)
             DeleteObject(small_);
         font_ =
-            CreateFontW(-d(18), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
+            CreateFontW(-d(16), 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
                         CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        if (candidateFont_) DeleteObject(candidateFont_);
+        candidateFont_ = CreateFontW(-d(21), 0, 0, 0, FW_MEDIUM, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+            OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Microsoft YaHei UI");
         small_ =
-            CreateFontW(-d(12), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
+            CreateFontW(-d(10), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
                         CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
     }
-    void layout() {
+    void layout(int maxWidth, int maxHeight) {
         HDC dc = GetDC(window_);
         auto old = SelectObject(dc, font_);
-        lines_.clear();
-        const auto &text = english_.empty() ? status_ : english_;
-        size_t start = 0;
-        int y = d(17), available = width_ - d(112);
-        while (start < text.size()) {
-            int fit = 0;
-            SIZE size;
-            GetTextExtentExPointW(dc, text.data() + start, (int)(text.size() - start), available, &fit,
-                                  nullptr, &size);
-            size_t count = std::max(1, fit);
-            auto newline = text.find(L'\n', start);
-            if (newline != std::wstring::npos && newline < start + count)
-                count = newline - start + 1;
-            else if (start + count < text.size()) {
-                auto space = text.rfind(L' ', start + count);
-                if (space != std::wstring::npos && space > start)
-                    count = space - start + 1;
-            }
-            lines_.push_back({start, count, {d(46), y, width_ - d(58), y + d(27)}});
-            y += d(27);
-            start += count;
-        }
-        if (lines_.empty())
-            y += d(27);
-        copy_ = {width_ - d(49), d(12), width_ - d(9), d(48)};
-        if (!raw_.empty())
-            y += d(29);
-        choices_ = {d(12), y + d(7), width_ - d(12), y + d(52)};
-        height_ = candidates_.empty() ? y + d(14) : choices_.bottom + d(12);
+        auto measure = [&](const std::wstring &text, size_t start, size_t count, PanelFont font) {
+            SelectObject(dc, font == PanelFont::Candidate ? candidateFont_ : font_);
+            SIZE size{};
+            GetTextExtentPoint32W(dc, text.data() + start, (int)count, &size);
+            return (int)size.cx;
+        };
+        layout_ = layoutPanel(english_.empty() ? status_ : english_, candidates_, selected_,
+                              scale_, maxWidth, maxHeight, measure);
+        width_ = layout_.width; height_ = layout_.height; lines_ = layout_.english;
+        copy_ = {layout_.copy.left, layout_.copy.top, layout_.copy.right, layout_.copy.bottom};
+        scroll_ = std::clamp(scroll_, 0, std::max(0, layout_.contentHeight - height_));
         SelectObject(dc, old);
         ReleaseDC(window_, dc);
     }
     size_t indexAt(POINT point) {
+        point.y += scroll_;
         if (english_.empty() || lines_.empty())
             return 0;
-        const Line *line = &lines_.front();
+        const TextLine *line = &lines_.front();
         for (auto &current : lines_)
             if (point.y >= current.rect.top)
                 line = &current;
@@ -100,79 +84,84 @@ class Panel {
     void paint() {
         PAINTSTRUCT ps;
         HDC dc = BeginPaint(window_, &ps);
-        RECT client;
-        GetClientRect(window_, &client);
+        RECT client; GetClientRect(window_, &client);
         HDC back = CreateCompatibleDC(dc);
         HBITMAP bitmap = CreateCompatibleBitmap(dc, width_, height_);
         auto oldBitmap = SelectObject(back, bitmap);
         HBRUSH transparent = CreateSolidBrush(RGB(1, 2, 3));
-        FillRect(back, &client, transparent);
-        DeleteObject(transparent);
-        auto brush = CreateSolidBrush(RGB(247, 248, 251));
-        auto pen = CreatePen(PS_SOLID, 1, RGB(205, 211, 222));
+        FillRect(back, &client, transparent); DeleteObject(transparent);
+        auto brush = CreateSolidBrush(RGB(239, 239, 237));
+        auto pen = CreatePen(PS_SOLID, 1, RGB(182, 182, 180));
         auto ob = SelectObject(back, brush), op = SelectObject(back, pen);
-        RoundRect(back, 0, 0, width_, height_, d(20), d(20));
-        SelectObject(back, ob);
-        SelectObject(back, op);
-        DeleteObject(brush);
-        DeleteObject(pen);
+        RoundRect(back, 0, 0, width_, height_, d(22), d(22));
+        SelectObject(back, ob); SelectObject(back, op); DeleteObject(brush); DeleteObject(pen);
+        // Keep both text and selection inside the rounded, transparent window.
+        HRGN clip = CreateRoundRectRgn(1, 1, width_ - 1, height_ - 1, d(22), d(22));
+        SelectClipRgn(back, clip); DeleteObject(clip);
         SetBkMode(back, TRANSPARENT);
-        SelectObject(back, small_);
-        SetTextColor(back, RGB(104, 115, 133));
-        TextOutW(back, d(15), d(21), L"EN", 2);
-        DrawTextW(back, L"复制", -1, &copy_, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        SelectObject(back, small_); SetTextColor(back, RGB(105, 105, 103));
+        TextOutW(back, d(15), d(16) - scroll_, L"EN", 2);
         SelectObject(back, font_);
         const auto &text = english_.empty() ? status_ : english_;
         size_t lo = std::min(selA_, selB_), hi = std::max(selA_, selB_);
         for (auto &line : lines_) {
-            SetTextColor(back, english_.empty() ? RGB(126, 137, 151) : RGB(32, 43, 60));
-            TextOutW(back, line.rect.left, line.rect.top, text.data() + line.start, (int)line.length);
+            int y = line.rect.top - scroll_;
+            if (line.rect.bottom - scroll_ < 0 || y >= height_) continue;
+            SetTextColor(back, english_.empty() ? RGB(118, 118, 116) : RGB(65, 65, 63));
+            TextOutW(back, line.rect.left, y, text.data() + line.start, (int)line.length);
             if (!english_.empty() && hi > line.start && lo < line.start + line.length) {
                 size_t a = std::max(lo, line.start), b = std::min(hi, line.start + line.length);
-                SIZE prefix, part;
+                SIZE prefix{}, part{};
                 GetTextExtentPoint32W(back, text.data() + line.start, (int)(a - line.start), &prefix);
                 GetTextExtentPoint32W(back, text.data() + a, (int)(b - a), &part);
-                RECT box = {line.rect.left + prefix.cx, line.rect.top, line.rect.left + prefix.cx + part.cx,
-                            line.rect.bottom};
-                SetBkColor(back, RGB(57, 101, 238));
-                SetTextColor(back, RGB(255, 255, 255));
-                ExtTextOutW(back, box.left, box.top, ETO_OPAQUE, &box, text.data() + a, (UINT)(b - a),
-                            nullptr);
+                RECT box = {line.rect.left + prefix.cx, y, line.rect.left + prefix.cx + part.cx,
+                            line.rect.bottom - scroll_};
+                SetBkColor(back, RGB(0, 122, 255)); SetTextColor(back, RGB(255, 255, 255));
+                ExtTextOutW(back, box.left, box.top, ETO_OPAQUE, &box, text.data() + a, (UINT)(b - a), nullptr);
             }
         }
-        if (!raw_.empty()) {
-            SetTextColor(back, RGB(111, 122, 141));
-            auto r = RECT{d(18), choices_.top - d(29), width_ - d(18), choices_.top};
+        if (layout_.divider) {
+            auto divider = CreatePen(PS_SOLID, 1, RGB(207, 207, 204));
+            auto prev = SelectObject(back, divider);
+            MoveToEx(back, d(10), layout_.divider - scroll_, nullptr);
+            LineTo(back, width_ - d(10), layout_.divider - scroll_);
+            SelectObject(back, prev); DeleteObject(divider);
+        }
+        for (const auto &choice : layout_.choices) {
+            RECT r = {choice.rect.left, choice.rect.top - scroll_, choice.rect.right, choice.rect.bottom - scroll_};
+            if (r.bottom < 0 || r.top >= height_) continue;
+            bool active = choice.index == selected_;
+            if (active) {
+                auto b = CreateSolidBrush(RGB(0, 122, 255));
+                auto old = SelectObject(back, b); auto previous = SelectObject(back, GetStockObject(NULL_PEN));
+                RoundRect(back, r.left, r.top, r.right, r.bottom, d(30), d(30));
+                SelectObject(back, old); SelectObject(back, previous); DeleteObject(b);
+            }
+            SetTextColor(back, active ? RGB(255, 255, 255) : RGB(74, 74, 72));
             SelectObject(back, small_);
-            DrawTextW(back, raw_.c_str(), -1, &r, DT_SINGLELINE | DT_END_ELLIPSIS | DT_VCENTER);
-            SelectObject(back, font_);
+            auto number = std::to_wstring(choice.index % 5 + 1);
+            TextOutW(back, r.left + d(9), r.top + d(14), number.c_str(), (int)number.size());
+            SelectObject(back, candidateFont_);
+            const auto &value = candidates_[choice.index].text;
+            for (const auto &line : choice.lines)
+                TextOutW(back, line.rect.left, line.rect.top - scroll_, value.data() + line.start, (int)line.length);
         }
-        if (!candidates_.empty()) {
-            size_t page = selected_ / 5;
-            int cell = (choices_.right - choices_.left) / 5;
-            for (size_t i = page * 5; i < candidates_.size() && i < page * 5 + 5; i++) {
-                RECT r = {choices_.left + (int)(i % 5) * cell, choices_.top,
-                          choices_.left + (int)(i % 5 + 1) * cell - d(4), choices_.bottom};
-                if (i == selected_) {
-                    auto b = CreateSolidBrush(RGB(42, 103, 246));
-                    auto old = SelectObject(back, b);
-                    auto p = SelectObject(back, GetStockObject(NULL_PEN));
-                    RoundRect(back, r.left, r.top, r.right, r.bottom, d(18), d(18));
-                    SelectObject(back, old);
-                    SelectObject(back, p);
-                    DeleteObject(b);
-                }
-                SetTextColor(back, i == selected_ ? RGB(255, 255, 255) : RGB(47, 58, 76));
-                std::wstring value = std::to_wstring(i % 5 + 1) + L" " + candidates_[i].text;
-                DrawTextW(back, value.c_str(), -1, &r,
-                          DT_CENTER | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
-            }
+        // A compact two-paper copy glyph, like the Mac panel; no wide text button.
+        auto paper = CreatePen(PS_SOLID, std::max(1, d(1)), RGB(120, 120, 117));
+        auto oldPen = SelectObject(back, paper);
+        auto oldBrush = SelectObject(back, GetStockObject(NULL_BRUSH));
+        RoundRect(back, copy_.left + d(8), copy_.top + d(3), copy_.right - d(3), copy_.bottom - d(7), d(3), d(3));
+        RoundRect(back, copy_.left + d(3), copy_.top + d(8), copy_.right - d(8), copy_.bottom - d(2), d(3), d(3));
+        SelectObject(back, oldBrush); SelectObject(back, oldPen); DeleteObject(paper);
+        if (layout_.contentHeight > height_) {
+            int track = height_ - d(20), thumb = std::max(d(18), track * height_ / layout_.contentHeight);
+            int top = d(10) + (track - thumb) * scroll_ / (layout_.contentHeight - height_);
+            RECT bar = {width_ - d(5), top, width_ - d(3), top + thumb};
+            auto b = CreateSolidBrush(RGB(162, 162, 158)); FillRect(back, &bar, b); DeleteObject(b);
         }
+        SelectClipRgn(back, nullptr);
         BitBlt(dc, 0, 0, width_, height_, back, 0, 0, SRCCOPY);
-        SelectObject(back, oldBitmap);
-        DeleteObject(bitmap);
-        DeleteDC(back);
-        EndPaint(window_, &ps);
+        SelectObject(back, oldBitmap); DeleteObject(bitmap); DeleteDC(back); EndPaint(window_, &ps);
     }
     LRESULT message(UINT m, WPARAM a, LPARAM b) {
         POINT point = {GET_X_LPARAM(b), GET_Y_LPARAM(b)};
@@ -189,12 +178,17 @@ class Panel {
                 copy();
                 return 0;
             }
-            if (!candidates_.empty() && PtInRect(&choices_, point)) {
-                int cell = (choices_.right - choices_.left) / 5;
-                size_t index = (selected_ / 5) * 5 + (point.x - choices_.left) / cell;
-                if (index < candidates_.size() && choose)
-                    choose(index);
-                return 0;
+            if (layout_.contentHeight > height_ && point.x >= width_ - d(9)) {
+                scroll_ = std::clamp((int)point.y * (layout_.contentHeight - height_) / std::max(1, height_),
+                                     0, layout_.contentHeight - height_);
+                InvalidateRect(window_, nullptr, FALSE); return 0;
+            }
+            for (const auto &choice : layout_.choices) {
+                RECT r = {choice.rect.left, choice.rect.top - scroll_, choice.rect.right, choice.rect.bottom - scroll_};
+                if (PtInRect(&r, point)) {
+                    if (choose) choose(choice.index);
+                    return 0;
+                }
             }
             if (!english_.empty()) {
                 selA_ = selB_ = indexAt(point);
@@ -203,6 +197,10 @@ class Panel {
                 InvalidateRect(window_, nullptr, FALSE);
             }
             return 0;
+        case WM_MOUSEWHEEL:
+            scroll_ = std::clamp(scroll_ - GET_WHEEL_DELTA_WPARAM(a) * d(36) / WHEEL_DELTA,
+                                 0, std::max(0, layout_.contentHeight - height_));
+            InvalidateRect(window_, nullptr, FALSE); return 0;
         case WM_MOUSEMOVE:
             if (dragging_) {
                 selB_ = indexAt(point);
@@ -262,11 +260,14 @@ class Panel {
             DeleteObject(font_);
         if (small_)
             DeleteObject(small_);
+        if (candidateFont_) DeleteObject(candidateFont_);
     }
     void hide() {
         if (window_)
             ShowWindow(window_, SW_HIDE);
+        if (GetCapture() == window_) ReleaseCapture();
         dragging_ = false;
+        scroll_ = 0;
         selA_ = selB_ = 0;
     }
     bool selecting() const {
@@ -285,7 +286,9 @@ class Panel {
             return;
         if (english_ != english) {
             selA_ = selB_ = 0;
+            scroll_ = 0;
         }
+        bool selectionChanged = selected_ != selected;
         english_ = english;
         status_ = status;
         raw_ = raw;
@@ -311,8 +314,15 @@ class Panel {
             scale_ = (int)dpi;
             fonts();
         }
-        width_ = std::min(d(580), (int)(info.rcWork.right - info.rcWork.left) - d(8));
-        layout();
+        layout((int)(info.rcWork.right - info.rcWork.left) - d(16),
+               (int)(info.rcWork.bottom - info.rcWork.top) - d(16));
+        if (selectionChanged)
+            for (const auto &choice : layout_.choices)
+                if (choice.index == selected_) {
+                    if (choice.rect.top < scroll_) scroll_ = choice.rect.top;
+                    else if (choice.rect.bottom > scroll_ + height_)
+                        scroll_ = std::min(choice.rect.top, choice.rect.bottom - height_);
+                }
         auto r = place({anchor.left, anchor.top, anchor.right, anchor.bottom}, width_, height_,
                        {info.rcWork.left, info.rcWork.top, info.rcWork.right, info.rcWork.bottom}, above);
         if (!r) {
