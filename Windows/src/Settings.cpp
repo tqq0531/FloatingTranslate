@@ -1,4 +1,5 @@
 #include "Ids.h"
+#include "InstallRuntime.h"
 #include "Translator.h"
 #include "WinUtil.h"
 #include <commctrl.h>
@@ -49,7 +50,7 @@ static bool profile(bool enable) {
     FreeLibrary(input);
     return ok != FALSE;
 }
-static bool elevatedRegistration(bool enable) {
+static bool elevatedRegistration(bool enable, const std::wstring &sid = L"") {
     try {
         if (enable) {
             verifyModels();
@@ -69,7 +70,13 @@ static bool elevatedRegistration(bool enable) {
             if (!run(directory() / L"FuyiCheck.exe", L"", false, nullptr, true))
                 return false;
         }
-        auto dll = loadLocal(L"FuyiIME.dll");
+        auto runtimeDirectory = directory();
+        if (enable) {
+            preparePreferences(sid.empty() ? userSid() : sid);
+            runtimeDirectory = installRuntime();
+        }
+        auto dll = LoadLibraryExW((runtimeDirectory / L"FuyiIME.dll").c_str(), nullptr,
+            LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
         if (!dll)
             return false;
         using Register = HRESULT(WINAPI *)();
@@ -86,13 +93,19 @@ static bool enable(bool value) {
         return false;
     auto exe = directory() / L"FuyiSettings.exe";
     DWORD code = 1;
-    bool ok = run(exe, value ? L"--register-elevated" : L"--unregister-elevated", true, &code);
+    // Capture old user settings before elevation/provisioning creates the new
+    // shared preference directory. No input text is copied into that directory.
+    auto previous = Options::read();
+    bool ok = run(exe, value ? L"--register-elevated " + userSid() : L"--unregister-elevated", true, &code);
+    if (ok && value) {
+        try { previous.save(); } catch (...) { ok = false; }
+    }
     if (ok) {
         ok = profile(value);
         if (value && ok)
             explain(L"浮译已启用。\n\n按 Win + 空格，选择“浮译”。\n轻按 Shift 切换中文 / "
-                    L"English。\n\n请保留当前解压目录，启用后不要移动或直接删除。更新或删除前请先停用；个别已"
-                    L"打开的软件需保存草稿后重新打开。");
+                    L"English。\n\n系统搜索兼容组件已复制到 Program Files；语言包仍来自压缩包，无需下载。"
+                    L"更新前请先停用旧版；个别已打开的软件需保存草稿后重新打开。");
         else if (!value)
             explain(L"浮译已停用并注销。\n\n已打开的软件可能仍占用输入法文件。请先切换其他输入法并关闭使用过"
                     L"浮译的软件，再删除解压目录。无需删除其他输入法。");
@@ -115,7 +128,7 @@ static HWND control(const wchar_t *type, const wchar_t *text, DWORD style, int x
 }
 static void save() {
     options.english = SendDlgItemMessageW(window, 101, BM_GETCHECK, 0, 0) == BST_CHECKED;
-    options.above = SendDlgItemMessageW(window, 102, BM_GETCHECK, 0, 0) == BST_CHECKED;
+    options.above = SendDlgItemMessageW(window, 102, BM_GETCHECK, 0, 0) != BST_CHECKED;
     options.privacy = SendDlgItemMessageW(window, 103, BM_GETCHECK, 0, 0) == BST_CHECKED;
     try {
         options.save();
@@ -158,12 +171,12 @@ static LRESULT CALLBACK proc(HWND w, UINT message, WPARAM a, LPARAM b) {
         control(L"BUTTON", L"检查离线组件", BS_PUSHBUTTON, 382, 123, 180, 44, 3);
         control(L"STATIC", L"输入偏好", 0, 34, 199, 500, 26, 0);
         control(L"BUTTON", L"拼音转换后默认输出英文", BS_AUTOCHECKBOX | WS_TABSTOP, 34, 235, 520, 30, 101);
-        control(L"BUTTON", L"翻译浮窗优先显示在光标上方", BS_AUTOCHECKBOX | WS_TABSTOP, 34, 274, 520, 30,
+        control(L"BUTTON", L"翻译浮窗优先显示在光标下方", BS_AUTOCHECKBOX | WS_TABSTOP, 34, 274, 520, 30,
                 102);
         control(L"BUTTON", L"隐私模式：直接输入，暂停拼音与翻译", BS_AUTOCHECKBOX | WS_TABSTOP, 34, 313, 530,
                 30, 103);
         CheckDlgButton(w, 101, options.english ? BST_CHECKED : BST_UNCHECKED);
-        CheckDlgButton(w, 102, options.above ? BST_CHECKED : BST_UNCHECKED);
+        CheckDlgButton(w, 102, options.above ? BST_UNCHECKED : BST_CHECKED);
         CheckDlgButton(w, 103, options.privacy ? BST_CHECKED : BST_UNCHECKED);
         control(L"STATIC", L"试一试：切换到浮译后输入 nihao，按空格确认。", 0, 34, 365, 540, 26, 0);
         auto editor = control(L"EDIT", L"", WS_BORDER | WS_TABSTOP | ES_MULTILINE | ES_AUTOVSCROLL, 34, 403,
@@ -175,7 +188,7 @@ static LRESULT CALLBACK proc(HWND w, UINT message, WPARAM a, LPARAM b) {
                 0, 34, 545, 540, 48, 0);
         control(L"BUTTON", L"使用说明", BS_PUSHBUTTON, 34, 614, 160, 36, 4);
         control(L"BUTTON", L"隐私与开源许可", BS_PUSHBUTTON, 208, 614, 180, 36, 5);
-        status = control(L"STATIC", L"0.1.1 · Windows x64 开发试用版", 0, 34, 670, 540, 40, 0);
+        status = control(L"STATIC", L"0.1.2 · Windows x64 开发试用版", 0, 34, 670, 540, 40, 0);
         return 0;
     }
     case WM_CTLCOLORSTATIC:
@@ -252,8 +265,11 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR args, int show) {
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     InitCommonControls();
     std::wstring command = args ? args : L"";
-    if (command == L"--register-elevated" || command == L"--unregister-elevated") {
-        bool result = elevatedRegistration(command == L"--register-elevated");
+    if (command == L"--register-elevated" || command.rfind(L"--register-elevated ", 0) == 0 ||
+        command == L"--unregister-elevated") {
+        bool registering = command != L"--unregister-elevated";
+        auto sid = command.rfind(L"--register-elevated ", 0) == 0 ? command.substr(20) : L"";
+        bool result = elevatedRegistration(registering, sid);
         CoUninitialize();
         return result ? 0 : 1;
     }

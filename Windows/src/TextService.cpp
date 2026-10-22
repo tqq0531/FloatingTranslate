@@ -197,7 +197,20 @@ class TextService : public ITfTextInputProcessorEx,
     HWND messages_ = nullptr;
     std::unique_ptr<Panel> panel_;
     std::shared_ptr<TranslationTarget> target_ = std::make_shared<TranslationTarget>();
-    Options options_;
+    Options options_, diskAtOverride_;
+    std::optional<Options> unsavedOptions_;
+    static bool sameOptions(const Options &a, const Options &b) {
+        return a.english == b.english && a.above == b.above && a.privacy == b.privacy && a.direct == b.direct;
+    }
+    void storeOptions() {
+        try { options_.save(); unsavedOptions_.reset(); }
+        catch (...) {
+            // AppContainer hosts have read-only shared preferences. Keep Shift
+            // and menu changes in this service instead of resetting at 150 ms.
+            diskAtOverride_ = Options::read();
+            unsavedOptions_ = options_;
+        }
+    }
     ShiftTap shift_;
     Sentence sentence_;
     std::string raw_;
@@ -240,6 +253,13 @@ class TextService : public ITfTextInputProcessorEx,
         if (!active_)
             return;
         auto updated = Options::read();
+        if (unsavedOptions_) {
+            if (sameOptions(updated, diskAtOverride_)) {
+                bool privacy = updated.privacy;
+                updated = *unsavedOptions_;
+                updated.privacy = updated.privacy || privacy; // Fail closed on inaccessible settings.
+            } else unsavedOptions_.reset();
+        }
         bool changed = updated.privacy != options_.privacy || updated.direct != options_.direct ||
                        updated.english != options_.english;
         options_.above = updated.above;
@@ -1083,10 +1103,7 @@ class TextService : public ITfTextInputProcessorEx,
                         options_.english = !options_.english;
                     if (id == 3)
                         options_.privacy = !options_.privacy;
-                    try {
-                        options_.save();
-                    } catch (...) {
-                    }
+                    storeOptions();
                     language_->update();
                 };
                 bar_->AddItem(language_);
@@ -1213,10 +1230,7 @@ class TextService : public ITfTextInputProcessorEx,
                 finishComposition();
                 clear();
                 options_.direct = !options_.direct;
-                try {
-                    options_.save();
-                } catch (...) {
-                }
+                storeOptions();
                 if (language_)
                     language_->update();
                 *eaten = FALSE;

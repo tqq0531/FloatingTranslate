@@ -2,6 +2,11 @@
 #include "WinUtil.h"
 #include <msctf.h>
 namespace fuyi {
+// Public TSF capability GUIDs absent from LLVM-MinGW's older msctf.h.
+static const GUID immersiveCategory = {0x13a016df, 0x560b, 0x46cd, {0x94,0x7a,0x4c,0x3a,0xf1,0xe0,0xe3,0x5d}};
+static const GUID trayCategory = {0x25504fb4, 0x7bab, 0x4bc1, {0x9c,0x69,0xcf,0x81,0x89,0x0f,0x0e,0xf5}};
+static const GUID serviceCategories[] = {GUID_TFCAT_TIP_KEYBOARD,
+    GUID_TFCAT_DISPLAYATTRIBUTEPROVIDER, immersiveCategory, trayCategory};
 static HRESULT writeKey(const std::wstring &path, const wchar_t *name, const std::wstring &value) {
     HKEY key = nullptr;
     auto result = RegCreateKeyExW(HKEY_LOCAL_MACHINE, path.c_str(), 0, nullptr, 0, KEY_SET_VALUE, nullptr,
@@ -17,8 +22,8 @@ HRESULT unregisterService() {
     ITfCategoryMgr *categories = nullptr;
     if (SUCCEEDED(CoCreateInstance(CLSID_TF_CategoryMgr, nullptr, CLSCTX_INPROC_SERVER, IID_ITfCategoryMgr,
                                    (void **)&categories))) {
-        categories->UnregisterCategory(serviceId, GUID_TFCAT_TIP_KEYBOARD, serviceId);
-        categories->UnregisterCategory(serviceId, GUID_TFCAT_DISPLAYATTRIBUTEPROVIDER, serviceId);
+        for (const auto &category : serviceCategories)
+            categories->UnregisterCategory(serviceId, category, serviceId);
         categories->Release();
     }
     ITfInputProcessorProfiles *profiles = nullptr;
@@ -59,9 +64,10 @@ HRESULT registerService() {
         hr = CoCreateInstance(CLSID_TF_CategoryMgr, nullptr, CLSCTX_INPROC_SERVER, IID_ITfCategoryMgr,
                               (void **)&categories);
     if (SUCCEEDED(hr)) {
-        hr = categories->RegisterCategory(serviceId, GUID_TFCAT_TIP_KEYBOARD, serviceId);
-        if (SUCCEEDED(hr))
-            hr = categories->RegisterCategory(serviceId, GUID_TFCAT_DISPLAYATTRIBUTEPROVIDER, serviceId);
+        for (const auto &category : serviceCategories) {
+            hr = categories->RegisterCategory(serviceId, category, serviceId);
+            if (FAILED(hr)) break;
+        }
     }
     release(categories);
     if (FAILED(hr))

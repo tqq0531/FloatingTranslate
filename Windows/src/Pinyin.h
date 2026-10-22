@@ -33,18 +33,14 @@ class Pinyin {
             return false;
         api_ = get();
         auto shared = utf8((directory() / L"RimeData").wstring());
-        wchar_t tmp[MAX_PATH];
-        if (!GetTempPathW(MAX_PATH, tmp))
-            return false;
-        auto runtime = fs::path(tmp) / (L"FuyiRime-" + std::to_wstring(GetCurrentProcessId()));
-        fs::create_directories(runtime);
+        auto runtime = pinyinRuntime();
         auto user = utf8(runtime.wstring());
         RIME_STRUCT(RimeTraits, traits);
         traits.shared_data_dir = shared.c_str();
         traits.user_data_dir = user.c_str();
         traits.distribution_name = "FloatingTranslate";
         traits.distribution_code_name = "fuyi";
-        traits.distribution_version = "0.1.1";
+        traits.distribution_version = "0.1.2";
         traits.app_name = "rime.fuyi";
         traits.min_log_level = 3;
         traits.log_dir = "";

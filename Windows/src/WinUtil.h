@@ -4,6 +4,7 @@
 #define _UNICODE
 #endif
 #define NOMINMAX
+#include "RuntimePaths.h"
 #include <atomic>
 #include <filesystem>
 #include <fstream>
@@ -54,23 +55,35 @@ inline fs::path directory() {
     return fs::path(std::wstring(path.data(), n)).parent_path();
 }
 inline fs::path configPath() {
-    PWSTR raw = nullptr;
-    if (FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &raw)))
-        throw std::runtime_error("Local settings unavailable");
-    fs::path path(raw);
-    CoTaskMemFree(raw);
-    path /= L"FloatingTranslate";
+    auto shared = sharedPreferencesRoot() / userSid();
+    if (fs::is_directory(shared)) {
+        auto file = shared / L"settings.ini";
+        if (appContainer() && !fs::is_regular_file(file))
+            throw std::runtime_error("Shared preferences unavailable");
+        return file;
+    }
+    // Before activation, keep the old preferences available for migration.
+    // A sandbox must never silently discard the user's privacy preference.
+    if (appContainer()) throw std::runtime_error("Shared preferences unavailable");
+    auto path = knownFolder(FOLDERID_LocalAppData) / L"FloatingTranslate";
     fs::create_directories(path);
     return path / L"settings.ini";
 }
 struct Options {
-    bool english = false, above = true, privacy = false, direct = false;
+    bool english = false, above = false, privacy = false, direct = false;
     static Options read() {
         Options o;
         try {
             auto p = configPath();
+            if (fs::exists(p)) {
+                std::ifstream readable(p);
+                if (!readable) throw std::runtime_error("Cannot read settings");
+            }
             o.english = GetPrivateProfileIntW(L"input", L"englishDefault", 0, p.c_str()) != 0;
-            o.above = GetPrivateProfileIntW(L"input", L"above", 1, p.c_str()) != 0;
+            // Older versions shipped an above-caret default. Migrate it once;
+            // subsequent explicit placement choices remain configurable.
+            o.above = GetPrivateProfileIntW(L"input", L"placementVersion", 0, p.c_str()) >= 2 &&
+                      GetPrivateProfileIntW(L"input", L"above", 0, p.c_str()) != 0;
             o.privacy = GetPrivateProfileIntW(L"input", L"privacy", 0, p.c_str()) != 0;
             o.direct = GetPrivateProfileIntW(L"input", L"directEnglish", 0, p.c_str()) != 0;
         } catch (...) {
@@ -86,6 +99,8 @@ struct Options {
                                                                         {L"directEnglish", direct}})
             if (!WritePrivateProfileStringW(L"input", entry.first, entry.second ? L"1" : L"0", p.c_str()))
                 throw std::runtime_error("Cannot save settings");
+        if (!WritePrivateProfileStringW(L"input", L"placementVersion", L"2", p.c_str()))
+            throw std::runtime_error("Cannot save placement version");
     }
 };
 inline void clipboard(HWND owner, const std::wstring &text) {

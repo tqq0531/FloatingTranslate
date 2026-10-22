@@ -1,7 +1,25 @@
-# Windows 0.1.1 测试边界与验收清单
+# Windows 0.1.2 测试边界与验收清单
 
 日期：2026-10-22。当前开发主机为 macOS / Apple Silicon，交叉编译 Windows x64。**尚未在真实 Windows 系统完成输入服务与宿主应用验收。** 此包供指定测试人员试用，不应按“与 Mac 一样成熟稳定”对外宣传。
 
+
+## 0.1.2 本轮状态 / Current status
+
+用户报告 0.1.1 在 Windows 任务栏搜索中只有字母、浮窗在上方且圆角外有白色区域。云电脑初步操作受到输入法切换和快捷键转发影响，不能作为可靠的浮译验收结果；随后用户明确要求停止实机测试，由用户自行验收。
+
+本轮修改：Program Files 只读组件副本、沉浸式/托盘能力注册、宿主 AppContainer 临时目录、四项开关的独立只读共享目录、设置读取失败保持隐私、沙箱中英切换的内存回退、下方默认及一次迁移、真实圆角窗口区域。未修改 Windows 安全隔离、杀毒或 SmartScreen。
+
+Current changes address sandbox-readable runtime files, immersive/tray registration, host-owned temporary storage, read-only shared preferences, fail-closed privacy, local sandbox mode switching, below-caret placement and rounded window regions. Interactive cloud-PC testing was stopped at the user's request; the following checks remain pending.
+
+用户重点验收：
+
+1. 先切到微软拼音，停用旧版；关闭使用过浮译的软件后启用 0.1.2。管理员提示后应出现成功通知；失败时不要继续安装其他组件或关闭安全保护。
+2. 重新打开任务栏搜索，Win+空格确认选择浮译，输入 `nihao` 并空格，必须得到“你好”；再在开始菜单搜索、Chrome、设置试用框中对比。检查当前不是本地 Mac 输入法转发。
+3. 搜索框内轻按 Shift，输入 `abc`，等一秒后仍应为英文模式，再切回拼音。
+4. 普通屏幕中部输入框默认浮窗在下方，屏幕底部空间不足时允许上翻；设置“下方”取消后应优先在上方。
+5. 深色、浅色桌面与云电脑中检查四个圆角外都是背景，没有白色直角；125%/150%/200% 缩放复查。
+6. 在设置中启用隐私模式后，普通软件和系统搜索均不应出现拼音与翻译；不要用真实密码测试。
+7. 标准用户凭另一管理员身份通过 UAC 的安装、重复启用、设置迁移及注销需要单独验证。
 
 ## 0.1.1 回归 / Regression checks
 
@@ -45,6 +63,6 @@ Shared core/layout regressions cover retained sentence context, unavailable-vers
 ## 仍未验收/支持的范围
 
 - 真实 Windows 10/11 上的注册、Win+空格列表、Chrome/Word/Qt 的 TSF 时序，以及窗口焦点、鼠标复制、高 DPI/副屏和标准密码框。
-- 32 位宿主程序、Windows ARM64 原生程序、UWP/沉浸式输入、管理员程序/安全桌面不在首轮支持范围。
+- 32 位宿主程序、Windows ARM64 原生程序和安全桌面不支持；系统搜索/UWP/沉浸式宿主及管理员程序尚未实机验收。
 - 分发包未做商业代码签名；不要求测试人员关闭杀毒、安全启动或 SmartScreen 来绕过错误。文件若被阻止或隔离，应停止并报告。
-- 翻译模型与 Apple Translation 不同，不保证与 Mac 产生相同文本。便携输入法首次仍需系统注册，启用期间不能移动或删除目录。
+- 翻译模型与 Apple Translation 不同，不保证与 Mac 产生相同文本。便携输入法首次仍需系统注册，0.1.2 注册 Program Files 中的副本，停用不强删占用中的版本目录。

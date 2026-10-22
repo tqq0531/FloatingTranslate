@@ -245,7 +245,9 @@ class Panel {
         wc.hInstance = module;
         wc.lpszClassName = L"Fuyi.TranslationPanel.1";
         wc.hCursor = LoadCursorW(nullptr, IDC_IBEAM);
-        wc.style = CS_DROPSHADOW;
+        // A window region, rather than colour-key transparency alone, excludes
+        // the corners even in remote desktop compositors.
+        wc.style = 0;
         RegisterClassW(&wc);
         CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST | WS_EX_LAYERED, wc.lpszClassName,
                         L"浮译", WS_POPUP, 0, 0, width_, height_, nullptr, nullptr, module, this);
@@ -329,9 +331,11 @@ class Panel {
             hide();
             return;
         }
-        SetWindowPos(window_, HWND_TOPMOST, r->left, r->top, width_, height_,
-                     SWP_NOACTIVATE | SWP_SHOWWINDOW);
-        InvalidateRect(window_, nullptr, FALSE);
+        HRGN shape = CreateRoundRectRgn(0, 0, width_ + 1, height_ + 1, d(22), d(22));
+        if (shape && !SetWindowRgn(window_, shape, FALSE)) DeleteObject(shape);
+        SetWindowPos(window_, HWND_TOPMOST, r->left, r->top, width_, height_, SWP_NOACTIVATE);
+        RedrawWindow(window_, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
+        ShowWindow(window_, SW_SHOWNOACTIVATE);
     }
 };
 } // namespace fuyi

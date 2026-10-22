@@ -1,7 +1,21 @@
-# 浮译 Windows · 0.1.1 开发试用版
+# 浮译 Windows · 0.1.2 开发试用版
 
 Windows 原生 TSF 输入法，中文拼音使用与 Mac 相同的 Rime 1.17.0 词库和方案，中文 → 英文使用完整内置的 OPUS-MT / ONNX 本地模型。
 
+
+## 0.1.2 修复 / Fixes
+
+- 加入 Windows 系统搜索所需的沉浸式/系统托盘能力注册。首次启用时，把包内组件复制到 `%ProgramFiles%\FloatingTranslate\0.1.2`，使受沙箱限制的宿主能读取词库、DLL 和模型；不下载组件、不放开用户桌面或 AppData 的权限。
+- 拼音临时目录在 AppContainer 宿主中使用该宿主自己的 `TempState`。共享目录只保存四项非敏感开关，宿主仅可读取；读取失败保持隐私模式，不退回不受限制的访问。
+- 默认改为光标下方；旧版的默认“上方”设置迁移一次，之后仍可手动选择。下方空间不足才翻到上方。
+- 使用真实窗口圆角区域裁剪，移除矩形系统阴影，防止远程桌面把圆角外显示为白色直角。
+- 沙箱不能写入设置时，Shift 中英切换在当前宿主内保留，避免被定时刷新立即切回。长期偏好请在设置程序中保存。
+
+Version 0.1.2 adds immersive/tray registration and copies bundled read-only components into Program Files during activation. AppContainer hosts use their own temporary storage and can only read a dedicated directory containing four non-secret preferences. Inaccessible preferences fail closed. The popup defaults below the caret, migrates the old default once, and uses a rounded window region to exclude rectangular corners. Unsaved sandbox mode switches remain local to the current host.
+
+按用户要求，本轮停止云电脑操作，交由用户实机验收。以下为代码层面修复与交叉编译检查，**没有把系统搜索输入、安装权限及远程透明效果标记为实机通过**。
+
+At the user's request, interactive cloud-PC testing was stopped. System-search input, installation permissions and remote corner rendering still require user verification; compilation is not host validation.
 
 ## 0.1.1 修复 / Fixes
 
@@ -18,13 +32,13 @@ The presentation follows the Mac version. Native rendering and translation engin
 ## 解压与启用
 
 1. 将整个压缩包解压到一个固定的本机目录，例如 `C:\Apps\FloatingTranslate`。首轮测试建议使用此目录。不要直接从压缩软件中运行，也不要放网络共享目录。
-2. 双击“启用浮译.cmd”，按 Windows 提示批准管理员注册。缺少 Microsoft Visual C++ x64 运行库时，会用包内微软签名的官方运行库安装程序准备，不下载组件。程序会先在独立进程验证真实拼音和离线翻译，通过后才注册，再由原用户启用自己的输入配置。
+2. 双击“启用浮译.cmd”，按 Windows 提示批准管理员注册与本机组件复制。缺少 Microsoft Visual C++ x64 运行库时，会用包内微软签名的官方运行库安装程序准备，不下载组件。程序会先在独立进程验证真实拼音和离线翻译，通过后才注册，再由原用户启用自己的输入配置。
 3. 按 Win + 空格，选择“浮译”。打开“浮译设置.cmd”，在试用框输入 `nihao`，按空格确认。第一次翻译需要校验并加载随包模型，后续在本进程内复用。
 4. 其他应用已打开时可能需要保存草稿后重新打开，刷新输入服务连接。不要强制结束有未保存文字的软件。
 
-**Windows 原生输入法不能只解压而完全零注册。** 这里的便携版指程序、词库、模型、推理库及必要运行库安装程序都随目录提供，不装 Python、Java、.NET 或开发工具，不另外下载语言包。首次启用需要一次系统注册，之后按系统输入法切换即可。启用期间请保留目录和路径；不能移动、重命名或直接删除。
+**Windows 原生输入法不能只解压而完全零注册。** 这里的便携版指程序、词库、模型、推理库及必要运行库安装程序都随目录提供，不装 Python、Java、.NET 或开发工具，不另外下载语言包。首次启用需要一次系统注册，之后按系统输入法切换即可。新版注册的是 Program Files 中的副本；解压目录用于设置、更新和停用，请保留到测试结束。
 
-目标为 Windows 10 / 11 x64 的桌面应用。此包只含 x64 TSF DLL；**32 位应用、Windows ARM64 原生应用、UWP/沉浸式输入以及管理员应用兼容性尚未支持或验收**。当前是未签名的开发试用版，不能当成已经在所有 Windows 软件中验证完成的稳定版。
+目标为 Windows 10 / 11 x64 的桌面应用。此包只含 x64 TSF DLL；**32 位应用、Windows ARM64 原生应用尚未支持；系统搜索、UWP/沉浸式输入以及管理员应用兼容性仍待实机验收**。当前是未签名的开发试用版，不能当成已经在所有 Windows 软件中验证完成的稳定版。
 
 ## 与 Mac 一致的主要操作
 
@@ -44,7 +58,7 @@ The presentation follows the Mac version. Native rendering and translation engin
 
 不读取系统剪贴板，不收集复制历史，不保存输入历史。只有明确点击复制、拖选后 Ctrl+C 或右键复制时才写入系统剪贴板，系统自己的剪贴板历史和云同步由 Windows 设置决定。Android 的 24 小时剪贴板历史不属于本 Windows 首版功能，因为本次以 Mac 功能为目标。
 
-设置只写 `%LOCALAPPDATA%\FloatingTranslate\settings.ini`，内容为默认语言、位置、隐私和直接英文等开关。Rime 固定词库缓存目录为系统临时目录中的 `FuyiRime-进程号`，用户词典和学习关闭。活动拼音、中文句子和译文只在内存中保留；不生成含真实输入的调试日志。
+启用前从旧 `%LOCALAPPDATA%\FloatingTranslate\settings.ini` 迁移设置；启用后设置保存到 `%PROGRAMDATA%\FloatingTranslate\Preferences\当前用户SID\settings.ini`，只含默认语言、位置、隐私和直接英文四个开关。该专用设置目录向 AppContainer 提供只读权限，不存放输入内容。普通宿主的 Rime 固定词库缓存在系统临时目录中的 `FuyiRime-进程号`，沙箱宿主则在自身 `TempState` 中创建同名缓存；用户词典和学习关闭。活动拼音、中文句子和译文只在内存中保留；不生成含真实输入的调试日志。
 
 TSF 安全激活、输入框标记 Password/Private/NumericPassword/NumericPIN、标准 Win32 密码样式和手动隐私模式会停止处理。自定义或错误标记的密码框无法可靠识别，**输入密码、验证码和密钥前请手动切换系统键盘**。测试工具只用固定示例句，不读取用户文档。
 
@@ -54,7 +68,7 @@ TSF 安全激活、输入框标记 Password/Private/NumericPassword/NumericPIN�
 
 先切到其他输入法，保存工作。双击“停用浮译.cmd”并批准注销。关闭使用过浮译的软件，确认文件不再占用后再删除目录。若仍占用，可正常注销 Windows 后删除；不强制杀浏览器。
 
-更新时先停用旧版，再解压完整新版到固定目录并启用。只注销本应用自己的 CLSID/Profile GUID，不移除其他系统输入法或键盘配置。不自动设置为默认输入法。
+更新时先停用旧版，再解压完整新版到固定目录并启用。注册组件位于 `%ProgramFiles%\FloatingTranslate\0.1.2`；停用只注销服务，不强制删除仍被宿主占用的组件。确认注销且文件不再占用后，可删除该版本目录及解压目录；保留设置便于以后重新启用。只注销本应用自己的 CLSID/Profile GUID，不移除其他系统输入法或键盘配置。不自动设置为默认输入法。
 
 ## 开发与验证
 
@@ -74,3 +88,5 @@ python3 Windows/tools/build.py
 模型来自 Helsinki-NLP/opus-mt-zh-en / Xenova 固定转换，遵循 CC BY 4.0；Rime BSD、词库 Apache 2.0、ONNX Runtime 及 Extensions MIT、LLVM-MinGW 及静态运行库保留各自许可。归属、改动说明、许可证和上游第三方声明均在 `licenses/`。Microsoft Visual C++ 官方安装程序带有独立条款，不被本仓库许可证覆盖。
 
 参考：Microsoft TSF / ITfKeyEventSink / ITfContextView 文档，Rime 官方 Windows 实现 Weasel，以及仓库 Mac 版输入会话实现。
+
+系统搜索兼容参考：[Microsoft IME requirements](https://learn.microsoft.com/en-us/windows/apps/develop/input/input-method-editor-requirements)。这里使用普通候选窗，未声明搜索面板内嵌候选的 UIless/Search contract。
