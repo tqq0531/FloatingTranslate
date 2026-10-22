@@ -14,11 +14,11 @@ Download the packaged assets from Releases. GitHub's automatically generated sou
 | --- | --- | --- | --- |
 | macOS | [0.5.11 ZIP](https://github.com/tqq0531/FloatingTranslate/releases/tag/v0.5.11) | [codex/macos-ime](https://github.com/tqq0531/FloatingTranslate/tree/codex/macos-ime) | macOS 26+，Apple Silicon 已验证，试用版。 / Tested on Apple Silicon; trial build. |
 | Android 安卓 | [0.1.4 离线 APK / Offline APK](https://github.com/tqq0531/FloatingTranslate/releases/tag/android-v0.1.4) | [codex/android-ime](https://github.com/tqq0531/FloatingTranslate/tree/codex/android-ime) | Android 8+，调试签名试用版；16 KB 内存页设备未保证兼容。 / Debug-signed trial; 16 KB page-size devices are not guaranteed. |
-| Windows | [0.1.0 x64 离线 ZIP / Offline ZIP](https://github.com/tqq0531/FloatingTranslate/releases/tag/windows-v0.1.0) | [codex/windows-ime](https://github.com/tqq0531/FloatingTranslate/tree/codex/windows-ime) | Windows 10/11 x64 开发测试版，尚未在真实 Windows 宿主完成验收。 / Development test build; actual Windows host validation remains pending. |
+| Windows | [0.1.1 x64 离线 ZIP / Offline ZIP](https://github.com/tqq0531/FloatingTranslate/releases/tag/windows-v0.1.1) | [codex/windows-ime](https://github.com/tqq0531/FloatingTranslate/tree/codex/windows-ime) | Windows 10/11 x64 开发测试版，尚未在真实 Windows 宿主完成验收。 / Development test build; actual Windows host validation remains pending. |
 
-默认分支保留三平台总览和最新共享代码，平台分支分别保留对应实现。部分目录是共享词库、模型准备脚本或历史代码，目录存在不代表该分支发布其他平台。
+默认分支提供三平台总览，平台分支分别保留对应版本的实现。部分目录是共享词库、模型准备脚本或历史代码，目录存在不代表该分支发布其他平台。
 
-The default branch contains the cross-platform overview and current shared code. Platform branches identify their corresponding implementations. Shared dictionaries, model preparation scripts, and historical directories may remain in a platform branch.
+The default branch provides the cross-platform overview. Platform branches identify the corresponding version of each implementation. Shared dictionaries, model preparation scripts, and historical directories may remain in a platform branch.
 
 ## 安装 / Installation
 
