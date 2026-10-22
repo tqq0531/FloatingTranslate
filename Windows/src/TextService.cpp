@@ -263,6 +263,7 @@ class TextService : public ITfTextInputProcessorEx,
         bool changed = updated.privacy != options_.privacy || updated.direct != options_.direct ||
                        updated.english != options_.english;
         options_.above = updated.above;
+        options_.remember = updated.remember;
         if (changed) {
             finishComposition();
             clear();
