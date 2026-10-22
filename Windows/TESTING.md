@@ -9,6 +9,8 @@
 - 同一份原生浮窗布局代码检查 100%、125%、150%、200%、250% DPI：短译文小卡片、紧凑候选、长句换行、超长候选全部字符保留、可滚动高度和屏幕宽度约束。
 - 新增固定离线自检句“你好今天健身了吗？”。Windows 自检实际输出由测试者在“检查离线组件.cmd”中查看，不将交叉编译当作 Windows 推理结果。
 
+- 本轮在 Mac 开发主机实际运行相同 C++ 推理实现及最终包模型：`你好，今天健身了吗？` → `Hello. Did you work out today?`；`你好今天健身了吗` → `You're working out today?`。无标点时模型可能省略问候语，这属于模型质量限制，不能将整句上下文修复宣传为与 Apple 翻译质量相同。没有把测试用的其他解码方案加入发行代码。
+
 Shared core/layout regressions cover retained sentence context, unavailable-versus-moved range evidence, compact cards, complete wrapped candidates and bounded scrolling at five DPI settings. These are not actual TSF host tests. The offline component checker includes the reported workout sentence.
 
 ### Windows 微信复测 / Windows WeChat retest
