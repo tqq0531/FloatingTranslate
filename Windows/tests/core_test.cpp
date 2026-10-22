@@ -1,5 +1,6 @@
 #include "../src/Core.h"
 #include "../src/PanelLayout.h"
+#include "../src/CandidateRanking.h"
 #include <cassert>
 #include <iostream>
 using namespace fuyi;
@@ -53,6 +54,36 @@ int main() {
     assert(breaksSentence(RangeEvidence::Different, RangeEvidence::Matches));
     assert(breaksSentence(RangeEvidence::Matches, RangeEvidence::Different));
     assert(!breaksSentence(RangeEvidence::Unknown, RangeEvidence::Matches));
+    // Personal ordering follows explicit short selections and must preserve
+    // consumed input lengths when an alternate candidate moves to the front.
+    CandidateRanking personal;
+    std::vector<Candidate> alternatives{{L"是", 3}, {L"时", 3}, {L"事", 3}};
+    personal.add("shi", {L"事", 3});
+    personal.add("shi", {L"事", 3});
+    personal.add("shi", {L"时", 3});
+    personal.rank("shi", alternatives);
+    assert(alternatives[0].text == L"事" && alternatives[0].consumed == 3);
+    std::vector<Candidate> otherSpelling{{L"是", 2}, {L"事", 2}};
+    personal.rank("si", otherSpelling);
+    assert(otherSpelling.front().text == L"是"); // No frequency borrowed from "shi".
+    assert(!memorableCandidate("pass", L"password"));
+    assert(!memorableCandidate("123", L"字"));
+    assert(!memorableCandidate("nihaojintianjianshenlema", L"你好今天健身了吗"));
+    std::vector<Candidate> sentenceChoices{{L"是什么", 7}, {L"事", 3}};
+    personal.rank("shishenme", sentenceChoices);
+    assert(sentenceChoices.front().text == L"是什么");
+    CandidateRanking restored;
+    for (const auto &entry : personal.entries())
+        restored.add(entry.pinyin, {entry.text, entry.pinyin.size()}, entry.count);
+    std::vector<Candidate> again{{L"是", 3}, {L"事", 3}};
+    restored.rank("shi", again);
+    assert(again.front().text == L"事");
+    assert(candidatePage(0, 13, true) == 5);
+    assert(candidatePage(8, 13, true) == 10);
+    assert(candidatePage(10, 13, true) == 10);
+    assert(candidatePage(12, 13, false) == 5);
+    assert(candidatePage(0, 13, false) == 0);
+    assert(candidatePage(0, 0, true) == 0);
     // Exercise the same layout code used by the native GDI panel, at 100–250%.
     for (int dpi : {96, 120, 144, 192, 240}) {
         auto measure = [dpi](const std::wstring &v, size_t a, size_t n, PanelFont font) {

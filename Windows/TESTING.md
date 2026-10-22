@@ -1,7 +1,22 @@
-# Windows 0.1.3 测试边界与验收清单
+# Windows 0.1.4 测试边界与验收清单
 
 日期：2026-10-22。当前开发主机为 macOS / Apple Silicon，交叉编译 Windows x64。**尚未在真实 Windows 系统完成输入服务与宿主应用验收。** 此包供指定测试人员试用，不应按“与 Mac 一样成熟稳定”对外宣传。
 
+
+## 0.1.4 回归与待测 / Ranking and copy verification
+
+核心测试新增：相同拼音选词计数排序、候选消费长度保留、不同拼音隔离、长句/数字/英文排除、短词不能顶掉完整长句候选、计数序列化结构恢复及翻页边界。核心/布局测试在开发主机运行，原生 DLL 和设置程序交叉编译；DPAPI、跨进程文件锁、Rime 迭代和原生剪贴板仍待 Windows 实机验证。
+
+测试者操作：
+
+1. 输入 `shi`，用数字键或鼠标选“事”数次，再输入 `shi`，应优先“事”。换一个普通软件检查排序；关闭重开软件后应保留本机计数。长候选与普通英文不能被保存为记忆项。
+2. 设置关闭记忆后应恢复 Rime 原始排序；重新开启后保留已有计数。清除后应恢复原排序。DPAPI 文件不是明文；本机用户身份下的其他程序仍可能调用解密，不能承诺能对抗本机恶意软件。
+3. `=` / `-`、PageDown / PageUp 翻页后，1—5 应选择当前页对应候选。第一页与末页不越界；没有拼音时应正常输入 `=`、`-`、`+`、`_`。
+4. 点击复制按钮后出现绿色对勾，再到本机记事本粘贴，核对英文完整且不是旧译文；拖选只复制选中部分。云电脑请区分远端本机复制与远端到 Mac 的剪贴板同步。
+5. 若剪贴板被占用应重试，最终失败显示红色图标；悬停查看原因。译文变化、切换输入框或关闭浮窗后不得再写入旧待复制内容。空译文不应清空剪贴板。
+6. 隐私模式和识别出的密码框不记录选词；关闭学习时不应用旧排序。系统搜索等沙箱只记当前进程，不能越权读取普通用户选词文件。
+
+Pure-core tests cover ranking, consumed-prefix preservation, rejected inputs, phrase protection, round-tripping entries and page boundaries. Windows DPAPI, file locking, Rime iteration and clipboard writes remain unverified on Windows; the user requested no further cloud-PC operation.
 
 ## 0.1.3 外观检查 / Visual refinement checks
 

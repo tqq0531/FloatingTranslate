@@ -200,7 +200,7 @@ class TextService : public ITfTextInputProcessorEx,
     Options options_, diskAtOverride_;
     std::optional<Options> unsavedOptions_;
     static bool sameOptions(const Options &a, const Options &b) {
-        return a.english == b.english && a.above == b.above && a.privacy == b.privacy && a.direct == b.direct;
+        return a.english == b.english && a.above == b.above && a.privacy == b.privacy && a.direct == b.direct && a.remember == b.remember;
     }
     void storeOptions() {
         try { options_.save(); unsavedOptions_.reset(); }
@@ -707,6 +707,8 @@ class TextService : public ITfTextInputProcessorEx,
             draw();
             return;
         }
+        if (!raw_.empty() && selected_ < candidates_.size())
+            pinyin().remember(raw_, candidates_[selected_]);
         // TSF anchors move when text is inserted at their boundary. A failed
         // post-commit comparison must not discard already committed words.
         bool hadPrefix = !sentence_.text.empty();
@@ -789,6 +791,7 @@ class TextService : public ITfTextInputProcessorEx,
         if (index >= candidates_.size())
             return;
         auto chosen = candidates_[index];
+        pinyin().remember(raw_, chosen);
         locked_ += chosen.text;
         raw_.erase(0, chosen.consumed);
         selected_ = 0;
@@ -911,6 +914,13 @@ class TextService : public ITfTextInputProcessorEx,
                 choose(ec, selected_);
             return true;
         }
+        if (!raw_.empty() && !candidates_.empty() && !(GetKeyState(VK_SHIFT) & 0x8000) &&
+            (code == VK_OEM_PLUS || code == VK_OEM_MINUS)) {
+            selected_ = candidatePage(selected_, candidates_.size(), code == VK_OEM_PLUS);
+            translate();
+            geometry(ec);
+            return true;
+        }
         if ((code >= VK_LEFT && code <= VK_DOWN) || code == VK_PRIOR || code == VK_NEXT || code == VK_HOME ||
             code == VK_END) {
             if (raw_.empty()) {
@@ -922,8 +932,13 @@ class TextService : public ITfTextInputProcessorEx,
                            : code == VK_PRIOR               ? -5
                            : code == VK_NEXT                ? 5
                                                             : 1;
-            if (!candidates_.empty())
-                selected_ = (size_t)std::clamp((int)selected_ + movement, 0, (int)candidates_.size() - 1);
+            if (!candidates_.empty()) {
+                if (code == VK_PRIOR || code == VK_NEXT)
+                    selected_ = candidatePage(selected_, candidates_.size(), code == VK_NEXT);
+                else if (code == VK_HOME) selected_ = 0;
+                else if (code == VK_END) selected_ = candidates_.size() - 1;
+                else selected_ = (size_t)std::clamp((int)selected_ + movement, 0, (int)candidates_.size() - 1);
+            }
             translate();
             geometry(ec);
             return true;

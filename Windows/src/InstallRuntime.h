@@ -25,7 +25,7 @@ inline void preparePreferences(const std::wstring &sid) {
     bool valid = IsValidSid(parsed); LocalFree(parsed);
     if (!valid || sid.find_first_not_of(L"S-0123456789") != std::wstring::npos)
         throw std::runtime_error("Invalid user identity");
-    // Only four non-secret input preferences live here. Apps get read access
+    // Only non-secret input preferences live here. Apps get read access
     // to this dedicated directory, never to ordinary user files/input text.
     const std::wstring common = L"D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;GRGX;;;BU)(A;OICI;GRGX;;;AC)";
     auto root = knownFolder(FOLDERID_ProgramData) / L"FloatingTranslate";
@@ -38,12 +38,12 @@ inline fs::path installRuntime() {
     // Program Files already permits read/execute from AppContainers. Keep
     // dictionaries and models read-only, with no broad ACL on Desktop/AppData.
     auto root = knownFolder(FOLDERID_ProgramFiles) / L"FloatingTranslate";
-    for (auto p : {root, root / L"0.1.3"}) {
+    for (auto p : {root, root / L"0.1.4"}) {
         if (fs::exists(p) && (GetFileAttributesW(p.c_str()) & FILE_ATTRIBUTE_REPARSE_POINT))
             throw std::runtime_error("Runtime path is a reparse point");
         fs::create_directory(p);
     }
-    auto destination = root / L"0.1.3";
+    auto destination = root / L"0.1.4";
     auto source = directory();
     if (fs::equivalent(source, destination)) return destination;
     auto nested = destination.lexically_relative(source);

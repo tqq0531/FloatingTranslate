@@ -1,5 +1,6 @@
 #include "Ids.h"
 #include "InstallRuntime.h"
+#include "PersonalDictionary.h"
 #include "Translator.h"
 #include "WinUtil.h"
 #include <commctrl.h>
@@ -129,6 +130,7 @@ static HWND control(const wchar_t *type, const wchar_t *text, DWORD style, int x
 static void save() {
     options.english = SendDlgItemMessageW(window, 101, BM_GETCHECK, 0, 0) == BST_CHECKED;
     options.above = SendDlgItemMessageW(window, 102, BM_GETCHECK, 0, 0) != BST_CHECKED;
+    options.remember = SendDlgItemMessageW(window, 105, BM_GETCHECK, 0, 0) == BST_CHECKED;
     options.privacy = SendDlgItemMessageW(window, 103, BM_GETCHECK, 0, 0) == BST_CHECKED;
     try {
         options.save();
@@ -175,20 +177,24 @@ static LRESULT CALLBACK proc(HWND w, UINT message, WPARAM a, LPARAM b) {
                 102);
         control(L"BUTTON", L"隐私模式：直接输入，暂停拼音与翻译", BS_AUTOCHECKBOX | WS_TABSTOP, 34, 313, 530,
                 30, 103);
+        control(L"BUTTON", L"记住常选短词，优先显示（本机加密）", BS_AUTOCHECKBOX | WS_TABSTOP,
+                34, 348, 390, 28, 105);
+        control(L"BUTTON", L"清除选词记忆", BS_PUSHBUTTON | WS_TABSTOP, 430, 348, 132, 28, 6);
+        CheckDlgButton(w, 105, options.remember ? BST_CHECKED : BST_UNCHECKED);
         CheckDlgButton(w, 101, options.english ? BST_CHECKED : BST_UNCHECKED);
         CheckDlgButton(w, 102, options.above ? BST_UNCHECKED : BST_CHECKED);
         CheckDlgButton(w, 103, options.privacy ? BST_CHECKED : BST_UNCHECKED);
-        control(L"STATIC", L"试一试：切换到浮译后输入 nihao，按空格确认。", 0, 34, 365, 540, 26, 0);
-        auto editor = control(L"EDIT", L"", WS_BORDER | WS_TABSTOP | ES_MULTILINE | ES_AUTOVSCROLL, 34, 403,
+        control(L"STATIC", L"试一试：nihao；= 下一页，- 上一页，空格选词。", 0, 34, 395, 540, 26, 0);
+        auto editor = control(L"EDIT", L"", WS_BORDER | WS_TABSTOP | ES_MULTILINE | ES_AUTOVSCROLL, 34, 433,
                               528, 76, 104);
         SendMessageW(editor, EM_SETLIMITTEXT, 1000, 0);
-        control(L"STATIC", L"本机处理 · 不下载语言包 · 不保存输入历史", 0, 34, 510, 540, 28, 0);
+        control(L"STATIC", L"本机离线 · 短词记忆可关闭或清除", 0, 34, 540, 540, 28, 0);
         control(L"STATIC",
                 L"密码框会尽量跳过处理；自定义密码框可能无法识别。\n输入密码、验证码或密钥前请切换系统键盘。",
-                0, 34, 545, 540, 48, 0);
-        control(L"BUTTON", L"使用说明", BS_PUSHBUTTON, 34, 614, 160, 36, 4);
-        control(L"BUTTON", L"隐私与开源许可", BS_PUSHBUTTON, 208, 614, 180, 36, 5);
-        status = control(L"STATIC", L"0.1.3 · Windows x64 开发试用版", 0, 34, 670, 540, 40, 0);
+                0, 34, 575, 540, 48, 0);
+        control(L"BUTTON", L"使用说明", BS_PUSHBUTTON, 34, 644, 160, 36, 4);
+        control(L"BUTTON", L"隐私与开源许可", BS_PUSHBUTTON, 208, 644, 180, 36, 5);
+        status = control(L"STATIC", L"0.1.4 · Windows x64 开发试用版", 0, 34, 700, 540, 40, 0);
         return 0;
     }
     case WM_CTLCOLORSTATIC:
@@ -205,7 +211,7 @@ static LRESULT CALLBACK proc(HWND w, UINT message, WPARAM a, LPARAM b) {
     }
     case WM_COMMAND: {
         int id = LOWORD(a);
-        if (id >= 101 && id <= 103 && HIWORD(a) == BN_CLICKED) {
+        if (((id >= 101 && id <= 103) || id == 105) && HIWORD(a) == BN_CLICKED) {
             save();
             return 0;
         }
@@ -227,6 +233,14 @@ static LRESULT CALLBACK proc(HWND w, UINT message, WPARAM a, LPARAM b) {
             if (id == 4) {
                 auto p = directory() / L"使用说明.txt";
                 ShellExecuteW(w, L"open", p.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+            }
+            if (id == 6) {
+                try {
+                    PersonalDictionary::clear();
+                    explain(L"本机已保存的选词记忆已清除。\n系统搜索等沙箱宿主仅有进程内记忆，关闭对应软件后清空。");
+                } catch (...) {
+                    explain(L"暂时无法清除，请稍后重试。", MB_OK | MB_ICONERROR);
+                }
             }
             if (id == 5) {
                 auto p = directory() / L"licenses" / L"TRANSLATION-NOTICE.txt";
@@ -288,7 +302,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR args, int show) {
     RegisterClassW(&wc);
     auto w = CreateWindowExW(0, wc.lpszClassName, L"浮译设置",
                              WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, CW_USEDEFAULT,
-                             CW_USEDEFAULT, 612, 770, nullptr, nullptr, instance, nullptr);
+                             CW_USEDEFAULT, 612, 800, nullptr, nullptr, instance, nullptr);
     ShowWindow(w, show);
     MSG msg;
     while (GetMessageW(&msg, nullptr, 0, 0) > 0) {

@@ -1,14 +1,24 @@
-# 浮译 Windows · 0.1.3 开发试用版
+# 浮译 Windows · 0.1.4 开发试用版
 
 Windows 原生 TSF 输入法，中文拼音使用与 Mac 相同的 Rime 1.17.0 词库和方案，中文 → 英文使用完整内置的 OPUS-MT / ONNX 本地模型。
 
+
+## 0.1.4 选词记忆、翻页与复制 / Ranking, paging and copy
+
+- 有拼音候选时，按 `=` 下一页、`-` 上一页，每页五项；PageUp / PageDown 仍可用。每次查询最多展示 100 个候选。第一页/最后一页不会循环；没有候选或按 Shift 输入 `+` / `_` 时保留正常符号输入。
+- 默认开启常用短词排序：根据相同拼音下明确选定的短候选次数，把常选字词移到前面；不同拼音独立计数。最多四个汉字、2048 项；不会用常选单字顶掉拼音尚未输入完的完整长词/整句候选。排序只调整现有 Rime 候选，不另造候选。
+- 设置中可关闭“记住常选短词”，也可“清除选词记忆”。普通桌面宿主通过 Windows 用户 DPAPI 加密保存到 `%LOCALAPPDATA%\FloatingTranslate\candidate-use.dat`。这属于新增的本地选词记录，**不再宣称完全零记录**；其中可能含人名或私人短语。没有启用云同步或上传。
+- 系统搜索等 AppContainer 宿主不访问普通用户目录，只在当前进程内记忆；关闭该宿主后清空。关闭“记住常选短词”会停止应用和写入记录；已有记录需用清除按钮删除，沙箱内已有记忆需关闭宿主清空。读取/保存失败不会阻断输入。
+- 复制按钮扩大点击区域；按下时固定本次待复制英文，不随鼠标改变。剪贴板暂时占用时最多异步尝试 12 次，每次间隔 80 毫秒；成功才显示绿色对勾，失败显示红色提示，悬停可看原因。关闭浮窗或译文改变会取消旧重试，避免过后复制过期文本。点击复制、拖选后 Ctrl+C 和右键复制共用此逻辑。
+
+While composing, `=` / `-` move between five-item pages, with up to 100 candidates. Explicitly selected short Chinese candidates gain priority for the same spelling. Up to 2,048 entries of at most four CJK characters are stored using Windows user-scoped DPAPI; this is local selection data and can contain names or private phrases. Settings can disable or clear it. Sandboxed hosts retain session-only ranking. Copying now has a larger target, bounded asynchronous retries and success/error feedback; stale retries are cancelled when the panel closes or translation changes. Windows behavior still requires user verification.
 
 ## 0.1.3 外观调整 / Compact visual refinement
 
 - 英文 16 → 14 DIP，中文候选 21 → 17 DIP，编号 10 → 9 DIP；单行译文卡从 44 → 34 DIP，常规双行浮窗从 94 → 74 DIP（约矮 21%）。窗口仍按系统 DPI 缩放。
 - 收紧左右内边距与候选间距，最大宽度从 560 → 440 DIP。长译文、长候选继续完整换行，超屏幕高度继续滚动查看。
 - 冷灰色轻微渐变、细描边、低对比分隔线、柔和蓝色选中态；复制图标缩小并加上鼠标悬停反馈。圆角外继续透明。
-- 保留 0.1.2 的系统搜索兼容处理、默认下方显示和隐私规则。当前包的系统副本路径为 `%ProgramFiles%\FloatingTranslate\0.1.3`。
+- 保留 0.1.2 的系统搜索兼容处理、默认下方显示和隐私规则。当前包的系统副本路径为 `%ProgramFiles%\FloatingTranslate\0.1.4`。
 
 The English/candidate/number type sizes are reduced to 14/17/9 DIP. A typical two-row panel is 74 DIP tall instead of 94; a translation-only card is 34 instead of 44. Tighter spacing, a cooler subtle gradient, fine borders, quieter dividers, blue selection and a smaller copy icon refine the presentation. Text still wraps completely and follows system DPI. The 0.1.2 compatibility and privacy changes remain included. Visual results on Windows await user testing.
 
@@ -52,7 +62,7 @@ The presentation follows the Mac version. Native rendering and translation engin
 ## 与 Mac 一致的主要操作
 
 - 轻按 Shift 切换中文拼音 / English 直接输入。Shift + 字母和 Ctrl / Alt / Win 快捷键放行。
-- 中文模式支持全拼、简拼（`nihao` / `nh`）、常见错拼（`zhogn` / `nihoa`）和音节分隔（`xi'an`），通过 Rime 原方案处理，不使用简化的临时字表，不学习个人输入历史。
+- 中文模式支持全拼、简拼（`nihao` / `nh`）、常见错拼（`zhogn` / `nihoa`）和音节分隔（`xi'an`），通过 Rime 原方案处理，不使用简化的临时字表，关闭 Rime 自动学习；0.1.4 的主动选词计数由独立加密模块处理。
 - 空格、1–5 或鼠标点击选词；方向键移动候选，PageUp / PageDown 每次移动 5 项。
 - 分段输入“我 / 今天 / 去北京”，翻译累计当前整句，不只翻译最后一段。不扫描文档前文。
 - 设置“拼音转换后默认输出英文”后，先选词，再按空格或回车提交就绪译文；普通中文默认时 Tab 提交另一语言。替换已上屏整句只在 TSF 范围和光标相邻关系可验证时进行，否则提示复制英文。
@@ -65,9 +75,9 @@ The presentation follows the Mac version. Native rendering and translation engin
 
 模型、分词器和词表随压缩包完整提供，所有模型先验证 SHA-256。推理只用 CPU，不调用 Google、微软、国内云翻译 API 或开发者服务器。应用代码没有 HTTP 客户端、遥测或自动更新；ONNX Runtime 遥测明确关闭。运行库由包内官方安装程序准备。系统的 UAC、证书检查、SmartScreen 或 Microsoft 运行库安装程序自身行为不等于应用上传正文；不能控制 Windows 和其他程序的网络行为。
 
-不读取系统剪贴板，不收集复制历史，不保存输入历史。只有明确点击复制、拖选后 Ctrl+C 或右键复制时才写入系统剪贴板，系统自己的剪贴板历史和云同步由 Windows 设置决定。Android 的 24 小时剪贴板历史不属于本 Windows 首版功能，因为本次以 Mac 功能为目标。
+不读取系统剪贴板，不收集复制历史，不保存连续输入正文或译文历史。开启选词记忆时会保存上述短候选及拼音、次数，不能把它描述为完全不保存输入相关数据。只有明确点击复制、拖选后 Ctrl+C 或右键复制时才写入系统剪贴板，系统自己的剪贴板历史和云同步由 Windows 设置决定。Android 的 24 小时剪贴板历史不属于本 Windows 首版功能，因为本次以 Mac 功能为目标。
 
-启用前从旧 `%LOCALAPPDATA%\FloatingTranslate\settings.ini` 迁移设置；启用后设置保存到 `%PROGRAMDATA%\FloatingTranslate\Preferences\当前用户SID\settings.ini`，只含默认语言、位置、隐私和直接英文四个开关。该专用设置目录向 AppContainer 提供只读权限，不存放输入内容。普通宿主的 Rime 固定词库缓存在系统临时目录中的 `FuyiRime-进程号`，沙箱宿主则在自身 `TempState` 中创建同名缓存；用户词典和学习关闭。活动拼音、中文句子和译文只在内存中保留；不生成含真实输入的调试日志。
+启用前从旧 `%LOCALAPPDATA%\FloatingTranslate\settings.ini` 迁移设置；启用后设置保存到 `%PROGRAMDATA%\FloatingTranslate\Preferences\当前用户SID\settings.ini`，只含默认语言、位置、隐私、直接英文、选词记忆等开关，短词记录不会写入这个共享目录。该专用设置目录向 AppContainer 提供只读权限，不存放输入内容。普通宿主的 Rime 固定词库缓存在系统临时目录中的 `FuyiRime-进程号`，沙箱宿主则在自身 `TempState` 中创建同名缓存；用户词典和学习关闭。活动拼音、中文句子和译文只在内存中保留；不生成含真实输入的调试日志。
 
 TSF 安全激活、输入框标记 Password/Private/NumericPassword/NumericPIN、标准 Win32 密码样式和手动隐私模式会停止处理。自定义或错误标记的密码框无法可靠识别，**输入密码、验证码和密钥前请手动切换系统键盘**。测试工具只用固定示例句，不读取用户文档。
 
@@ -77,7 +87,7 @@ TSF 安全激活、输入框标记 Password/Private/NumericPassword/NumericPIN�
 
 先切到其他输入法，保存工作。双击“停用浮译.cmd”并批准注销。关闭使用过浮译的软件，确认文件不再占用后再删除目录。若仍占用，可正常注销 Windows 后删除；不强制杀浏览器。
 
-更新时先停用旧版，再解压完整新版到固定目录并启用。注册组件位于 `%ProgramFiles%\FloatingTranslate\0.1.3`；停用只注销服务，不强制删除仍被宿主占用的组件。确认注销且文件不再占用后，可删除该版本目录及解压目录；保留设置便于以后重新启用。只注销本应用自己的 CLSID/Profile GUID，不移除其他系统输入法或键盘配置。不自动设置为默认输入法。
+更新时先停用旧版，再解压完整新版到固定目录并启用。注册组件位于 `%ProgramFiles%\FloatingTranslate\0.1.4`；停用只注销服务，不强制删除仍被宿主占用的组件。确认注销且文件不再占用后，可删除该版本目录及解压目录；保留设置便于以后重新启用。只注销本应用自己的 CLSID/Profile GUID，不移除其他系统输入法或键盘配置。不自动设置为默认输入法。
 
 ## 开发与验证
 
@@ -99,3 +109,5 @@ python3 Windows/tools/build.py
 参考：Microsoft TSF / ITfKeyEventSink / ITfContextView 文档，Rime 官方 Windows 实现 Weasel，以及仓库 Mac 版输入会话实现。
 
 系统搜索兼容参考：[Microsoft IME requirements](https://learn.microsoft.com/en-us/windows/apps/develop/input/input-method-editor-requirements)。这里使用普通候选窗，未声明搜索面板内嵌候选的 UIless/Search contract。
+
+复制实现参考：[OpenClipboard](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-openclipboard)、[SetClipboardData](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setclipboarddata)。

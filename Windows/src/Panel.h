@@ -3,9 +3,44 @@
 #include "PanelLayout.h"
 #include "WinUtil.h"
 #include <windowsx.h>
+#include <commctrl.h>
 namespace fuyi {
 class Panel {
-    HWND window_ = nullptr;
+    HWND window_ = nullptr, tooltip_ = nullptr;
+    std::wstring pendingCopy_, copyTip_ = L"复制英文";
+    int copyState_ = 0, copyAttempts_ = 0;
+    DWORD copyError_ = ERROR_SUCCESS;
+    static constexpr UINT_PTR copyRetryTimer = 2, copyFeedbackTimer = 3;
+    RECT copyHit() const {
+        return {copy_.left - d(2), copy_.top - d(4), copy_.right + d(5), copy_.bottom + d(4)};
+    }
+    bool onCopy(POINT p) const { auto r = copyHit(); return PtInRect(&r, p) != FALSE; }
+    void copyFeedback(int state, const std::wstring &tip) {
+        copyState_ = state; copyTip_ = tip;
+        if (tooltip_) {
+            TOOLINFOW tool = {sizeof(tool)};
+            tool.hwnd = window_; tool.uId = 1; tool.lpszText = copyTip_.data();
+            SendMessageW(tooltip_, TTM_UPDATETIPTEXTW, 0, (LPARAM)&tool);
+        }
+        InvalidateRect(window_, nullptr, FALSE);
+    }
+    void attemptCopy() {
+        copyError_ = clipboard(window_, pendingCopy_);
+        if (copyError_ == ERROR_SUCCESS) {
+            KillTimer(window_, copyRetryTimer); pendingCopy_.clear();
+            copyFeedback(1, L"已复制英文，可粘贴到目标输入框");
+            SetTimer(window_, copyFeedbackTimer, 1600, nullptr);
+        } else if (++copyAttempts_ >= 12 || copyError_ == ERROR_NO_DATA) {
+            KillTimer(window_, copyRetryTimer); pendingCopy_.clear();
+            copyFeedback(2, copyError_ == ERROR_NO_DATA ? L"英文翻译尚未就绪" :
+                copyError_ == ERROR_ACCESS_DENIED ? L"系统暂不允许访问剪贴板，请重试或检查云电脑剪贴板设置" :
+                                                  L"剪贴板暂时被占用，点击重新复制");
+            SetTimer(window_, copyFeedbackTimer, 2400, nullptr);
+        } else {
+            copyFeedback(3, L"正在重试复制英文…");
+            SetTimer(window_, copyRetryTimer, 80, nullptr);
+        }
+    }
     HFONT font_ = nullptr, small_ = nullptr, candidateFont_ = nullptr;
     int scale_ = 96, width_ = 136, height_ = 34, scroll_ = 0;
     PanelLayout layout_;
@@ -55,6 +90,11 @@ class Panel {
                               scale_, maxWidth, maxHeight, measure);
         width_ = layout_.width; height_ = layout_.height; lines_ = layout_.english;
         copy_ = {layout_.copy.left, layout_.copy.top, layout_.copy.right, layout_.copy.bottom};
+        if (tooltip_) {
+            TOOLINFOW tool = {sizeof(tool)};
+            tool.hwnd = window_; tool.uId = 1; tool.rect = copyHit();
+            SendMessageW(tooltip_, TTM_NEWTOOLRECTW, 0, (LPARAM)&tool);
+        }
         scroll_ = std::clamp(scroll_, 0, std::max(0, layout_.contentHeight - height_));
         SelectObject(dc, old);
         ReleaseDC(window_, dc);
@@ -168,12 +208,23 @@ class Panel {
         // A compact two-paper copy glyph, like the Mac panel; no wide text button.
         if (copyHover_)
             surface(back, copy_, d(8), RGB(226, 234, 245), RGB(226, 234, 245));
-        auto paper = CreatePen(PS_SOLID, std::max(1, d(1)),
-                              copyHover_ ? RGB(0, 112, 232) : RGB(131, 139, 151));
+        COLORREF ink = copyState_ == 1 ? RGB(37, 145, 100) : copyState_ == 2 ? RGB(194, 77, 66) :
+                       copyHover_ ? RGB(0, 112, 232) : RGB(131, 139, 151);
+        auto paper = CreatePen(PS_SOLID, std::max(1, d(1)), ink);
         auto oldPen = SelectObject(back, paper);
         auto oldBrush = SelectObject(back, GetStockObject(NULL_BRUSH));
-        RoundRect(back, copy_.left + d(8), copy_.top + d(3), copy_.right - d(4), copy_.bottom - d(7), d(3), d(3));
-        RoundRect(back, copy_.left + d(4), copy_.top + d(7), copy_.right - d(8), copy_.bottom - d(3), d(3), d(3));
+        if (copyState_ == 1) {
+            MoveToEx(back, copy_.left + d(5), copy_.top + d(11), nullptr);
+            LineTo(back, copy_.left + d(9), copy_.top + d(15));
+            LineTo(back, copy_.left + d(17), copy_.top + d(6));
+        } else if (copyState_ == 2) {
+            MoveToEx(back, copy_.left + d(11), copy_.top + d(5), nullptr);
+            LineTo(back, copy_.left + d(11), copy_.top + d(13));
+            Rectangle(back, copy_.left + d(10), copy_.top + d(16), copy_.left + d(12), copy_.top + d(18));
+        } else {
+            RoundRect(back, copy_.left + d(8), copy_.top + d(3), copy_.right - d(4), copy_.bottom - d(7), d(3), d(3));
+            RoundRect(back, copy_.left + d(4), copy_.top + d(7), copy_.right - d(8), copy_.bottom - d(3), d(3), d(3));
+        }
         SelectObject(back, oldBrush); SelectObject(back, oldPen); DeleteObject(paper);
         if (layout_.contentHeight > height_) {
             int track = height_ - d(20), thumb = std::max(d(18), track * height_ / layout_.contentHeight);
@@ -188,6 +239,10 @@ class Panel {
     LRESULT message(UINT m, WPARAM a, LPARAM b) {
         POINT point = {GET_X_LPARAM(b), GET_Y_LPARAM(b)};
         switch (m) {
+        case WM_TIMER:
+            if (a == copyRetryTimer && !pendingCopy_.empty()) attemptCopy();
+            if (a == copyFeedbackTimer) { KillTimer(window_, copyFeedbackTimer); copyFeedback(0, L"复制英文"); }
+            return 0;
         case WM_MOUSEACTIVATE:
             return MA_NOACTIVATE;
         case WM_ERASEBKGND:
@@ -196,7 +251,7 @@ class Panel {
             paint();
             return 0;
         case WM_LBUTTONDOWN:
-            if (PtInRect(&copy_, point)) {
+            if (onCopy(point)) {
                 copy();
                 return 0;
             }
@@ -228,7 +283,7 @@ class Panel {
             InvalidateRect(window_, &copy_, FALSE);
             return 0;
         case WM_MOUSEMOVE: {
-            bool hover = PtInRect(&copy_, point) != FALSE;
+            bool hover = onCopy(point) != FALSE;
             if (hover != copyHover_) {
                 copyHover_ = hover;
                 InvalidateRect(window_, &copy_, FALSE);
@@ -288,9 +343,21 @@ class Panel {
                         L"浮译", WS_POPUP, 0, 0, width_, height_, nullptr, nullptr, module, this);
         if (window_)
             SetLayeredWindowAttributes(window_, RGB(1, 2, 3), 255, LWA_COLORKEY);
+        INITCOMMONCONTROLSEX controls = {sizeof(controls), ICC_WIN95_CLASSES};
+        InitCommonControlsEx(&controls);
+        tooltip_ = CreateWindowExW(WS_EX_TOPMOST | WS_EX_NOACTIVATE, TOOLTIPS_CLASSW, nullptr,
+            WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX, CW_USEDEFAULT, CW_USEDEFAULT,
+            CW_USEDEFAULT, CW_USEDEFAULT, window_, nullptr, module, nullptr);
+        if (tooltip_) {
+            TOOLINFOW tool = {sizeof(tool)};
+            tool.hwnd = window_; tool.uId = 1; tool.uFlags = TTF_SUBCLASS;
+            tool.rect = copyHit(); tool.lpszText = copyTip_.data();
+            SendMessageW(tooltip_, TTM_ADDTOOLW, 0, (LPARAM)&tool);
+        }
         fonts();
     }
     ~Panel() {
+        if (tooltip_) DestroyWindow(tooltip_);
         if (window_)
             DestroyWindow(window_);
         if (font_)
@@ -300,6 +367,10 @@ class Panel {
         if (candidateFont_) DeleteObject(candidateFont_);
     }
     void hide() {
+        pendingCopy_.clear();
+        KillTimer(window_, copyRetryTimer);
+        KillTimer(window_, copyFeedbackTimer);
+        copyState_ = 0;
         if (window_)
             ShowWindow(window_, SW_HIDE);
         if (GetCapture() == window_) ReleaseCapture();
@@ -309,20 +380,26 @@ class Panel {
         selA_ = selB_ = 0;
     }
     bool selecting() const {
-        return dragging_;
+        return dragging_ || !pendingCopy_.empty();
     }
     std::wstring selectedText() const {
         size_t a = std::min(selA_, selB_), b = std::min(std::max(selA_, selB_), english_.size());
         return b > a ? english_.substr(a, b - a) : L"";
     }
     void copy() {
-        clipboard(window_, selectedText().empty() ? english_ : selectedText());
+        KillTimer(window_, copyFeedbackTimer);
+        pendingCopy_ = selectedText();
+        if (pendingCopy_.empty()) pendingCopy_ = english_;
+        copyAttempts_ = 0;
+        attemptCopy();
     }
     void show(RECT anchor, const std::wstring &english, const std::wstring &status, const std::wstring &raw,
               const std::vector<Candidate> &choices, size_t selected, bool above) {
         if (!window_)
             return;
         if (english_ != english) {
+            KillTimer(window_, copyRetryTimer); KillTimer(window_, copyFeedbackTimer);
+            pendingCopy_.clear(); copyFeedback(0, L"复制英文");
             selA_ = selB_ = 0;
             scroll_ = 0;
         }

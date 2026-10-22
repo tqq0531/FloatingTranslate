@@ -1,6 +1,7 @@
 #pragma once
 #include "Core.h"
 #include "WinUtil.h"
+#include "PersonalDictionary.h"
 #include <mutex>
 #include <rime_api.h>
 namespace fuyi {
@@ -9,6 +10,7 @@ class Pinyin {
     RimeApi *api_ = nullptr;
     std::atomic<RimeSessionId> session_{0};
     HMODULE dll_ = nullptr;
+    PersonalDictionary personal_;
     void input(const std::string &raw) {
         api_->clear_composition(session_);
         RIME_STRUCT(RimeCommit, c);
@@ -40,7 +42,7 @@ class Pinyin {
         traits.user_data_dir = user.c_str();
         traits.distribution_name = "FloatingTranslate";
         traits.distribution_code_name = "fuyi";
-        traits.distribution_version = "0.1.3";
+        traits.distribution_version = "0.1.4";
         traits.app_name = "rime.fuyi";
         traits.min_log_level = 3;
         traits.log_dir = "";
@@ -61,17 +63,17 @@ class Pinyin {
         if (!session_ || raw.empty() || raw.size() > 100)
             return out;
         input(raw);
-        RIME_STRUCT(RimeContext, c);
-        if (!api_->get_context(session_, &c))
-            return out;
-        for (int i = 0; i < c.menu.num_candidates && i < 30; i++) {
-            auto text = wide(c.menu.candidates[i].text);
-            if (std::none_of(text.begin(), text.end(), [](wchar_t ch) {
+        RimeCandidateListIterator iterator{};
+        if (!api_->candidate_list_begin(session_, &iterator)) return out;
+        while (out.size() < 100 && api_->candidate_list_next(&iterator)) {
+            auto text = wide(iterator.candidate.text ? iterator.candidate.text : "");
+            if (!text.empty() && std::none_of(text.begin(), text.end(), [](wchar_t ch) {
                     return (ch >= L'a' && ch <= L'z') || (ch >= L'A' && ch <= L'Z');
                 }))
-                out.push_back({text, (size_t)i});
+                out.push_back({text, (size_t)iterator.index});
+            if (iterator.index >= 199) break; // Bound work even when candidates are filtered.
         }
-        api_->free_context(&c);
+        api_->candidate_list_end(&iterator);
         for (auto &candidate : out) {
             size_t index = candidate.consumed;
             input(raw);
@@ -102,7 +104,12 @@ class Pinyin {
         out.erase(std::remove_if(out.begin(), out.end(),
                                  [&](const Candidate &x) { return !x.consumed || x.consumed > raw.size(); }),
                   out.end());
+        personal_.rank(raw, out);
         return out;
+    }
+    void remember(const std::string &raw, const Candidate &candidate) {
+        std::lock_guard lock(mutex_);
+        personal_.remember(raw, candidate);
     }
     std::optional<std::wstring> preview(std::string raw) {
         std::wstring result;
