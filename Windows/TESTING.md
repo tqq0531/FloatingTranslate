@@ -1,7 +1,13 @@
-# Windows 0.1.2 测试边界与验收清单
+# Windows 0.1.3 测试边界与验收清单
 
 日期：2026-10-22。当前开发主机为 macOS / Apple Silicon，交叉编译 Windows x64。**尚未在真实 Windows 系统完成输入服务与宿主应用验收。** 此包供指定测试人员试用，不应按“与 Mac 一样成熟稳定”对外宣传。
 
+
+## 0.1.3 外观检查 / Visual refinement checks
+
+常规双行高度 94 → 74 DIP、单行高度 44 → 34 DIP；正文与中文候选分别为 14 / 17 DIP。复用同一份布局代码检查完整候选、长句换行、屏幕范围及 100%—250% DPI；原生绘制交叉编译并进行包完整性检查。按用户要求不再操作云电脑，字体观感、渐变、透明边缘和复制悬停效果交由用户实机测试，不将代码检查当作 Windows 渲染验收。
+
+Regular two-row height changes from 94 to 74 DIP and translation-only height from 44 to 34. Existing layout regressions cover full text, wrapping, bounds and five DPI settings. Native drawing is cross-compiled and the full package audited; actual Windows appearance remains unverified at the user's request.
 
 ## 0.1.2 本轮状态 / Current status
 
@@ -13,7 +19,7 @@ Current changes address sandbox-readable runtime files, immersive/tray registrat
 
 用户重点验收：
 
-1. 先切到微软拼音，停用旧版；关闭使用过浮译的软件后启用 0.1.2。管理员提示后应出现成功通知；失败时不要继续安装其他组件或关闭安全保护。
+1. 先切到微软拼音，停用旧版；关闭使用过浮译的软件后启用当前版本。管理员提示后应出现成功通知；失败时不要继续安装其他组件或关闭安全保护。
 2. 重新打开任务栏搜索，Win+空格确认选择浮译，输入 `nihao` 并空格，必须得到“你好”；再在开始菜单搜索、Chrome、设置试用框中对比。检查当前不是本地 Mac 输入法转发。
 3. 搜索框内轻按 Shift，输入 `abc`，等一秒后仍应为英文模式，再切回拼音。
 4. 普通屏幕中部输入框默认浮窗在下方，屏幕底部空间不足时允许上翻；设置“下方”取消后应优先在上方。

@@ -7,12 +7,12 @@ namespace fuyi {
 class Panel {
     HWND window_ = nullptr;
     HFONT font_ = nullptr, small_ = nullptr, candidateFont_ = nullptr;
-    int scale_ = 96, width_ = 160, height_ = 44, scroll_ = 0;
+    int scale_ = 96, width_ = 136, height_ = 34, scroll_ = 0;
     PanelLayout layout_;
     std::wstring english_, status_, raw_;
     std::vector<Candidate> candidates_;
     size_t selected_ = 0, selA_ = 0, selB_ = 0;
-    bool dragging_ = false;
+    bool dragging_ = false, copyHover_ = false;
     std::vector<TextLine> lines_;
     RECT copy_{};
     int d(int value) const {
@@ -33,13 +33,13 @@ class Panel {
         if (small_)
             DeleteObject(small_);
         font_ =
-            CreateFontW(-d(16), 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
+            CreateFontW(-d(PanelStyle::englishSize), 0, 0, 0, FW_MEDIUM, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
                         CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
         if (candidateFont_) DeleteObject(candidateFont_);
-        candidateFont_ = CreateFontW(-d(21), 0, 0, 0, FW_MEDIUM, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+        candidateFont_ = CreateFontW(-d(PanelStyle::candidateSize), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
             OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Microsoft YaHei UI");
         small_ =
-            CreateFontW(-d(10), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
+            CreateFontW(-d(PanelStyle::labelSize), 0, 0, 0, FW_MEDIUM, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
                         CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
     }
     void layout(int maxWidth, int maxHeight) {
@@ -81,6 +81,30 @@ class Panel {
         ReleaseDC(window_, dc);
         return index;
     }
+    void surface(HDC dc, const RECT &rect, int diameter, COLORREF top, COLORREF bottom,
+                 COLORREF outline = CLR_INVALID) {
+        int saved = SaveDC(dc);
+        HRGN shape = CreateRoundRectRgn(rect.left, rect.top, rect.right, rect.bottom, diameter, diameter);
+        ExtSelectClipRgn(dc, shape, RGN_AND); DeleteObject(shape);
+        int height = std::max(1L, rect.bottom - rect.top - 1);
+        auto blend = [height](int a, int b, int y) { return a + (b - a) * y / height; };
+        for (int y = rect.top; y < rect.bottom; ++y) {
+            int t = y - rect.top;
+            SetDCBrushColor(dc, RGB(blend(GetRValue(top), GetRValue(bottom), t),
+                                   blend(GetGValue(top), GetGValue(bottom), t),
+                                   blend(GetBValue(top), GetBValue(bottom), t)));
+            RECT band = {rect.left, y, rect.right, y + 1};
+            FillRect(dc, &band, (HBRUSH)GetStockObject(DC_BRUSH));
+        }
+        RestoreDC(dc, saved);
+        if (outline != CLR_INVALID) {
+            auto pen = CreatePen(PS_SOLID, 1, outline);
+            auto previousPen = SelectObject(dc, pen);
+            auto previousBrush = SelectObject(dc, GetStockObject(NULL_BRUSH));
+            RoundRect(dc, rect.left, rect.top, rect.right, rect.bottom, diameter, diameter);
+            SelectObject(dc, previousBrush); SelectObject(dc, previousPen); DeleteObject(pen);
+        }
+    }
     void paint() {
         PAINTSTRUCT ps;
         HDC dc = BeginPaint(window_, &ps);
@@ -90,24 +114,22 @@ class Panel {
         auto oldBitmap = SelectObject(back, bitmap);
         HBRUSH transparent = CreateSolidBrush(RGB(1, 2, 3));
         FillRect(back, &client, transparent); DeleteObject(transparent);
-        auto brush = CreateSolidBrush(RGB(239, 239, 237));
-        auto pen = CreatePen(PS_SOLID, 1, RGB(182, 182, 180));
-        auto ob = SelectObject(back, brush), op = SelectObject(back, pen);
-        RoundRect(back, 0, 0, width_, height_, d(22), d(22));
-        SelectObject(back, ob); SelectObject(back, op); DeleteObject(brush); DeleteObject(pen);
+        RECT card = {0, 0, width_, height_};
+        surface(back, card, d(PanelStyle::cornerDiameter), RGB(248, 249, 251), RGB(238, 240, 244),
+                RGB(202, 207, 214));
         // Keep both text and selection inside the rounded, transparent window.
-        HRGN clip = CreateRoundRectRgn(1, 1, width_ - 1, height_ - 1, d(22), d(22));
+        HRGN clip = CreateRoundRectRgn(1, 1, width_ - 1, height_ - 1, d(PanelStyle::cornerDiameter), d(PanelStyle::cornerDiameter));
         SelectClipRgn(back, clip); DeleteObject(clip);
         SetBkMode(back, TRANSPARENT);
-        SelectObject(back, small_); SetTextColor(back, RGB(105, 105, 103));
-        TextOutW(back, d(15), d(16) - scroll_, L"EN", 2);
+        SelectObject(back, small_); SetTextColor(back, RGB(133, 140, 150));
+        TextOutW(back, d(11), d(12) - scroll_, L"EN", 2);
         SelectObject(back, font_);
         const auto &text = english_.empty() ? status_ : english_;
         size_t lo = std::min(selA_, selB_), hi = std::max(selA_, selB_);
         for (auto &line : lines_) {
             int y = line.rect.top - scroll_;
             if (line.rect.bottom - scroll_ < 0 || y >= height_) continue;
-            SetTextColor(back, english_.empty() ? RGB(118, 118, 116) : RGB(65, 65, 63));
+            SetTextColor(back, english_.empty() ? RGB(130, 137, 147) : RGB(49, 54, 62));
             TextOutW(back, line.rect.left, y, text.data() + line.start, (int)line.length);
             if (!english_.empty() && hi > line.start && lo < line.start + line.length) {
                 size_t a = std::max(lo, line.start), b = std::min(hi, line.start + line.length);
@@ -121,10 +143,10 @@ class Panel {
             }
         }
         if (layout_.divider) {
-            auto divider = CreatePen(PS_SOLID, 1, RGB(207, 207, 204));
+            auto divider = CreatePen(PS_SOLID, 1, RGB(218, 222, 228));
             auto prev = SelectObject(back, divider);
-            MoveToEx(back, d(10), layout_.divider - scroll_, nullptr);
-            LineTo(back, width_ - d(10), layout_.divider - scroll_);
+            MoveToEx(back, d(8), layout_.divider - scroll_, nullptr);
+            LineTo(back, width_ - d(8), layout_.divider - scroll_);
             SelectObject(back, prev); DeleteObject(divider);
         }
         for (const auto &choice : layout_.choices) {
@@ -132,26 +154,26 @@ class Panel {
             if (r.bottom < 0 || r.top >= height_) continue;
             bool active = choice.index == selected_;
             if (active) {
-                auto b = CreateSolidBrush(RGB(0, 122, 255));
-                auto old = SelectObject(back, b); auto previous = SelectObject(back, GetStockObject(NULL_PEN));
-                RoundRect(back, r.left, r.top, r.right, r.bottom, d(30), d(30));
-                SelectObject(back, old); SelectObject(back, previous); DeleteObject(b);
+                surface(back, r, d(26), RGB(38, 145, 255), RGB(0, 119, 245));
             }
-            SetTextColor(back, active ? RGB(255, 255, 255) : RGB(74, 74, 72));
+            SetTextColor(back, active ? RGB(255, 255, 255) : RGB(70, 76, 86));
             SelectObject(back, small_);
             auto number = std::to_wstring(choice.index % 5 + 1);
-            TextOutW(back, r.left + d(9), r.top + d(14), number.c_str(), (int)number.size());
+            TextOutW(back, r.left + d(7), r.top + d(11), number.c_str(), (int)number.size());
             SelectObject(back, candidateFont_);
             const auto &value = candidates_[choice.index].text;
             for (const auto &line : choice.lines)
                 TextOutW(back, line.rect.left, line.rect.top - scroll_, value.data() + line.start, (int)line.length);
         }
         // A compact two-paper copy glyph, like the Mac panel; no wide text button.
-        auto paper = CreatePen(PS_SOLID, std::max(1, d(1)), RGB(120, 120, 117));
+        if (copyHover_)
+            surface(back, copy_, d(8), RGB(226, 234, 245), RGB(226, 234, 245));
+        auto paper = CreatePen(PS_SOLID, std::max(1, d(1)),
+                              copyHover_ ? RGB(0, 112, 232) : RGB(131, 139, 151));
         auto oldPen = SelectObject(back, paper);
         auto oldBrush = SelectObject(back, GetStockObject(NULL_BRUSH));
-        RoundRect(back, copy_.left + d(8), copy_.top + d(3), copy_.right - d(3), copy_.bottom - d(7), d(3), d(3));
-        RoundRect(back, copy_.left + d(3), copy_.top + d(8), copy_.right - d(8), copy_.bottom - d(2), d(3), d(3));
+        RoundRect(back, copy_.left + d(8), copy_.top + d(3), copy_.right - d(4), copy_.bottom - d(7), d(3), d(3));
+        RoundRect(back, copy_.left + d(4), copy_.top + d(7), copy_.right - d(8), copy_.bottom - d(3), d(3), d(3));
         SelectObject(back, oldBrush); SelectObject(back, oldPen); DeleteObject(paper);
         if (layout_.contentHeight > height_) {
             int track = height_ - d(20), thumb = std::max(d(18), track * height_ / layout_.contentHeight);
@@ -201,12 +223,25 @@ class Panel {
             scroll_ = std::clamp(scroll_ - GET_WHEEL_DELTA_WPARAM(a) * d(36) / WHEEL_DELTA,
                                  0, std::max(0, layout_.contentHeight - height_));
             InvalidateRect(window_, nullptr, FALSE); return 0;
-        case WM_MOUSEMOVE:
+        case WM_MOUSELEAVE:
+            copyHover_ = false;
+            InvalidateRect(window_, &copy_, FALSE);
+            return 0;
+        case WM_MOUSEMOVE: {
+            bool hover = PtInRect(&copy_, point) != FALSE;
+            if (hover != copyHover_) {
+                copyHover_ = hover;
+                InvalidateRect(window_, &copy_, FALSE);
+            }
+            TRACKMOUSEEVENT track = {sizeof(track), TME_LEAVE, window_, 0};
+            TrackMouseEvent(&track);
+            if (hover) SetCursor(LoadCursorW(nullptr, IDC_HAND));
             if (dragging_) {
                 selB_ = indexAt(point);
                 InvalidateRect(window_, nullptr, FALSE);
             }
             return 0;
+        }
         case WM_LBUTTONUP:
             if (dragging_) {
                 selB_ = indexAt(point);
@@ -269,6 +304,7 @@ class Panel {
             ShowWindow(window_, SW_HIDE);
         if (GetCapture() == window_) ReleaseCapture();
         dragging_ = false;
+        copyHover_ = false;
         scroll_ = 0;
         selA_ = selB_ = 0;
     }
@@ -331,7 +367,7 @@ class Panel {
             hide();
             return;
         }
-        HRGN shape = CreateRoundRectRgn(0, 0, width_ + 1, height_ + 1, d(22), d(22));
+        HRGN shape = CreateRoundRectRgn(0, 0, width_ + 1, height_ + 1, d(PanelStyle::cornerDiameter), d(PanelStyle::cornerDiameter));
         if (shape && !SetWindowRgn(window_, shape, FALSE)) DeleteObject(shape);
         SetWindowPos(window_, HWND_TOPMOST, r->left, r->top, width_, height_, SWP_NOACTIVATE);
         RedrawWindow(window_, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);

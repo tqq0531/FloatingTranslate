@@ -188,7 +188,7 @@ static LRESULT CALLBACK proc(HWND w, UINT message, WPARAM a, LPARAM b) {
                 0, 34, 545, 540, 48, 0);
         control(L"BUTTON", L"使用说明", BS_PUSHBUTTON, 34, 614, 160, 36, 4);
         control(L"BUTTON", L"隐私与开源许可", BS_PUSHBUTTON, 208, 614, 180, 36, 5);
-        status = control(L"STATIC", L"0.1.2 · Windows x64 开发试用版", 0, 34, 670, 540, 40, 0);
+        status = control(L"STATIC", L"0.1.3 · Windows x64 开发试用版", 0, 34, 670, 540, 40, 0);
         return 0;
     }
     case WM_CTLCOLORSTATIC:

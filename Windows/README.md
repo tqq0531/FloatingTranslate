@@ -1,7 +1,16 @@
-# 浮译 Windows · 0.1.2 开发试用版
+# 浮译 Windows · 0.1.3 开发试用版
 
 Windows 原生 TSF 输入法，中文拼音使用与 Mac 相同的 Rime 1.17.0 词库和方案，中文 → 英文使用完整内置的 OPUS-MT / ONNX 本地模型。
 
+
+## 0.1.3 外观调整 / Compact visual refinement
+
+- 英文 16 → 14 DIP，中文候选 21 → 17 DIP，编号 10 → 9 DIP；单行译文卡从 44 → 34 DIP，常规双行浮窗从 94 → 74 DIP（约矮 21%）。窗口仍按系统 DPI 缩放。
+- 收紧左右内边距与候选间距，最大宽度从 560 → 440 DIP。长译文、长候选继续完整换行，超屏幕高度继续滚动查看。
+- 冷灰色轻微渐变、细描边、低对比分隔线、柔和蓝色选中态；复制图标缩小并加上鼠标悬停反馈。圆角外继续透明。
+- 保留 0.1.2 的系统搜索兼容处理、默认下方显示和隐私规则。当前包的系统副本路径为 `%ProgramFiles%\FloatingTranslate\0.1.3`。
+
+The English/candidate/number type sizes are reduced to 14/17/9 DIP. A typical two-row panel is 74 DIP tall instead of 94; a translation-only card is 34 instead of 44. Tighter spacing, a cooler subtle gradient, fine borders, quieter dividers, blue selection and a smaller copy icon refine the presentation. Text still wraps completely and follows system DPI. The 0.1.2 compatibility and privacy changes remain included. Visual results on Windows await user testing.
 
 ## 0.1.2 修复 / Fixes
 
@@ -68,7 +77,7 @@ TSF 安全激活、输入框标记 Password/Private/NumericPassword/NumericPIN�
 
 先切到其他输入法，保存工作。双击“停用浮译.cmd”并批准注销。关闭使用过浮译的软件，确认文件不再占用后再删除目录。若仍占用，可正常注销 Windows 后删除；不强制杀浏览器。
 
-更新时先停用旧版，再解压完整新版到固定目录并启用。注册组件位于 `%ProgramFiles%\FloatingTranslate\0.1.2`；停用只注销服务，不强制删除仍被宿主占用的组件。确认注销且文件不再占用后，可删除该版本目录及解压目录；保留设置便于以后重新启用。只注销本应用自己的 CLSID/Profile GUID，不移除其他系统输入法或键盘配置。不自动设置为默认输入法。
+更新时先停用旧版，再解压完整新版到固定目录并启用。注册组件位于 `%ProgramFiles%\FloatingTranslate\0.1.3`；停用只注销服务，不强制删除仍被宿主占用的组件。确认注销且文件不再占用后，可删除该版本目录及解压目录；保留设置便于以后重新启用。只注销本应用自己的 CLSID/Profile GUID，不移除其他系统输入法或键盘配置。不自动设置为默认输入法。
 
 ## 开发与验证
 
