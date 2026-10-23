@@ -90,3 +90,6 @@ Mac 0.5.14: tapping Shift after typing `make` in Pinyin commits the literal `mak
 Mac 0.5.15：英文输入使用透明背景和无下划线的组合文字，光标停在句末；保留实时整句翻译和回车 / Tab 输出选择。中文拼音仍保留常规组词提示。第三方编辑器可能自行覆盖组合文字样式。
 
 Mac 0.5.15: English composition uses a transparent background with no underline and leaves the caret at the end. Live sentence translation and Enter / Tab output selection remain available. Pinyin retains its standard composition appearance. Third-party editors may override composition styling.
+
+Mac 0.5.16：尚未上屏的分段拼音中，退格先撤回最近一次选词并恢复拼音，保留未选部分；整句上屏后仍按普通退格删除。
+Backspace reopens the last selected segment in an active Pinyin composition, preserving its remaining input. Committed text uses normal deletion.

@@ -52,7 +52,7 @@ struct SettingsView: View {
                     .font(.system(size: 12)).foregroundStyle(.secondary).lineSpacing(5)
                 Button("隐私与密码输入说明") { showPrivacy = true }
                     .buttonStyle(.link).font(.system(size: 12))
-                Text("MAC 本地试用版 · 0.5.15").font(.system(size: 10, weight: .medium, design: .monospaced)).foregroundStyle(.secondary)
+                Text("MAC 本地试用版 · 0.5.16").font(.system(size: 10, weight: .medium, design: .monospaced)).foregroundStyle(.secondary)
             }
             .padding(32).frame(width: 290).frame(maxHeight: .infinity)
             .background(Color(red: 0.89, green: 0.95, blue: 0.93))

@@ -96,6 +96,16 @@ final class TextClient: NSObject, IMKTextInput {
             controller.end(client)
             return
         }
+        for c in "nihaoma" { _ = key(String(c)) }
+        let undoCandidates = FloatingPanel.shared.model.candidates
+        let partialIndex = undoCandidates.firstIndex { $0.code.count < "nihaoma".count }!
+        FloatingPanel.shared.onChoose?(partialIndex)
+        check(client.text != "nihaoma" && client.marked.location != NSNotFound, "partial selection stays composed")
+        _ = key("", code: 51)
+        check(client.text == "nihaoma", "Backspace restores the selected segment and preserves remaining Pinyin")
+        check(!FloatingPanel.shared.model.candidates.isEmpty, "restored Pinyin has selectable candidates")
+        _ = key("", code: 53)
+        client.text = ""; client.caret = 0
         check(client.overridden == "com.apple.keylayout.ABC", "activation restores a known keyboard layout")
         client.onInsert = { [weak controller, weak client] in controller?.flush(client) }
         type("wo"); type("jintian"); type("qubeijing")

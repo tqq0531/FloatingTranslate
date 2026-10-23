@@ -29,6 +29,7 @@ final class InputSession: NSObject {
     static let engine = PinyinEngine(url: Bundle.main.url(forResource: "pinyin_simp.dict", withExtension: "yaml"))
     private var raw = ""
     private var locked = ""
+    private var selectionUndo: [(code: String, prefix: String)] = []
     private var selection = 0
     private var sentence = SentenceBuffer()
     private var translation = ""
@@ -147,6 +148,10 @@ final class InputSession: NSObject {
             if !inline.isEmpty { sendMarkedText("", to: client) }
             reset(); return true
         case 51:
+            if let previous = selectionUndo.popLast() {
+                raw = previous.code + raw; locked = previous.prefix
+                selection = 0; refresh(client); return true
+            }
             if !raw.isEmpty { raw.removeLast() }
             else if !locked.isEmpty { locked.removeLast() }
             else if !sentence.isEmpty {
@@ -202,7 +207,7 @@ final class InputSession: NSObject {
         let punctuation = [",": "，", ".": "。", "?": "？", "!": "！", ";": "；", ":": "："]
         if let mark = punctuation[characters], !inline.isEmpty || !sentence.isEmpty {
             if Preferences.shared.englishDefault && !inline.isEmpty && completeFragment {
-                locked = fragment + mark; raw = ""; selection = 0; refresh(client)
+                selectionUndo.removeAll(); locked = fragment + mark; raw = ""; selection = 0; refresh(client)
             } else { commitChinese(client, suffix: mark) }
             return true
         }
@@ -246,6 +251,7 @@ final class InputSession: NSObject {
         let items = choices
         guard items.indices.contains(index) else { return }
         if !PrivacyProtection.isBlocking { Self.engine.remember(raw, candidate: items[index]) }
+        selectionUndo.append((items[index].code, locked))
         locked += items[index].text; raw.removeFirst(items[index].code.count); selection = 0
         if raw.isEmpty && !Preferences.shared.englishDefault { commitChinese(client) }
         else { refresh(client) }
@@ -287,7 +293,7 @@ final class InputSession: NSObject {
         client.setMarkedText(payload, selectionRange: NSRange(location: text.utf16.count, length: 0), replacementRange: replacement)
     }
     private func clearComposition() {
-        raw = ""; locked = ""; selection = 0; Self.engine.clearActiveQuery()
+        raw = ""; locked = ""; selectionUndo.removeAll(); selection = 0; Self.engine.clearActiveQuery()
         if Self.activeController === self || Self.activeController == nil { FloatingPanel.shared.onChoose = nil }
     }
     private func appendLiteral(_ text: String, client: IMKTextInput) {
