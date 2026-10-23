@@ -145,6 +145,35 @@ final class TextClient: NSObject, IMKTextInput {
         controller.end(client)
         check(FloatingPanel.shared.model.pinyin == "n", "late deactivation of the old client cannot clear the new client")
         other.end(otherClient)
+        let mixed = TextClient(); mixed.bundleID = "com.example.Editor"
+        let mixedSession = InputSession(client: mixed); mixedSession.begin(mixed)
+        func mixedKey(_ text: String, code: UInt16 = 0, modifiers: NSEvent.ModifierFlags = []) -> Bool {
+            let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: modifiers, timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: 0, context: nil, characters: text, charactersIgnoringModifiers: text, isARepeat: false, keyCode: code)!
+            return mixedSession.process(event, client: mixed)
+        }
+        func mixedType(_ text: String) { for c in text { _ = mixedKey(String(c)) }; _ = mixedKey(" ", code: 49) }
+        func mixedShift() {
+            let time = ProcessInfo.processInfo.systemUptime
+            for (flags, stamp) in [(NSEvent.ModifierFlags.shift, time), (NSEvent.ModifierFlags(), time + 0.05)] {
+                let event = NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: flags, timestamp: stamp, windowNumber: 0, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 56)!
+                _ = mixedSession.process(event, client: mixed)
+            }
+        }
+        mixedType("yinwei"); mixedType("zheshi")
+        mixedShift()
+        check(Preferences.shared.directEnglish, "Shift enters English without discarding the current sentence")
+        for c in "mac" { check(mixedKey(String(c)), "literal English inside Chinese stays in tracked sentence") }
+        try await Task.sleep(for: .milliseconds(350))
+        check(FloatingPanel.shared.model.source == "因为这是mac", "timer and English translation callback preserve mixed context")
+        mixedShift()
+        check(!Preferences.shared.directEnglish, "Shift returns to Pinyin without discarding mixed context")
+        mixedType("banben"); mixedType("de")
+        check(mixed.text == "因为这是mac版本的" && FloatingPanel.shared.model.source == mixed.text, "mixed-language whole sentence survives returning to Pinyin")
+        check(mixedKey("A", modifiers: .capsLock), "Caps Lock literal stays tracked")
+        mixedType("ceshi")
+        check(FloatingPanel.shared.model.source == mixed.text && mixed.text.contains("mac版本的A"), "uppercase English does not discard earlier Chinese")
+        check(mixed.reads == 0, "mixed input never scans document content")
+        mixedSession.end(mixed)
         let qt = TextClient(); qt.bundleID = "www.itdp.cn"; qt.malformedQtRanges = true
         let qtSession = InputSession(client: qt); qtSession.begin(qt)
         func qtKey(_ text: String, code: UInt16 = 0) -> Bool {
