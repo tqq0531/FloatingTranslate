@@ -82,3 +82,7 @@ Third-party components retain their own licenses: Rime BSD, Pinyin dictionaries 
 Tap Shift for Pinyin or English-to-Chinese. English word spaces stay within the sentence; Enter commits the default, Tab the alternative and Esc the source. Independent output defaults are available for each direction. Use `=` / `-` for five-item candidate pages, up to 100 entries. Optional, clearable short-candidate counts use the local Keychain; prose and translations are not saved. Mixed-language sentence context remains intact. Apple language packs still need initial system preparation.
 
 See [usage and checks](docs/mac-0.5.13.md) and [privacy](docs/PRIVACY.md).
+
+Mac 0.5.14：中文模式输入 `make` 后轻按 Shift，提交原始英文 `make`，不接受当前“马克”等拼音候选；已确认的中文前缀和整句翻译上下文继续保留。此行为不受两个默认输出开关影响。
+
+Mac 0.5.14: tapping Shift after typing `make` in Pinyin commits the literal `make`, rather than the Chinese candidate preview. Confirmed prefixes and mixed-sentence translation context are retained, independent of the output defaults.

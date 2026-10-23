@@ -99,7 +99,9 @@ final class InputSession: NSObject {
         if event.type == .flagsChanged {
             let toggle = shiftTap.modifierChanged(keyCode: Int(event.keyCode), shiftDown: event.modifierFlags.contains(.shift), otherModifiers: !event.modifierFlags.intersection([.command, .control, .option]).isEmpty, time: event.timestamp)
             if toggle {
-                if !inline.isEmpty { commitChinese(client) }
+                // Shift confirms exactly what was typed, including any already
+                // selected prefix, without accepting the current Rime preview.
+                if !inline.isEmpty { commitChinese(client, literal: true) }
                 Preferences.shared.directEnglish.toggle()
                 if sentence.isEmpty { showModeToast(client) } else { requestTranslation(); startTracking(); updatePosition(client) }
                 return true
@@ -285,9 +287,9 @@ final class InputSession: NSObject {
         modeToast?.cancel(); modeToast = nil
         requestTranslation(); startTracking(); updatePosition(client)
     }
-    private func commitChinese(_ client: IMKTextInput, suffix: String = "") {
+    private func commitChinese(_ client: IMKTextInput, suffix: String = "", literal: Bool = false) {
         guard !PrivacyProtection.isBlocking else { reset(); return }
-        let text = (completeFragment ? fragment : inline) + suffix
+        let text = (literal ? inline : (completeFragment ? fragment : inline)) + suffix
         guard !text.isEmpty else { return }
         let marked = markedRange(client)
         let start = location(marked) ?? location(selectedRange(client))

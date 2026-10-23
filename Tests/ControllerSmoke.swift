@@ -176,6 +176,32 @@ final class TextClient: NSObject, IMKTextInput {
                 englishSession.end(englishClient)
             }
         }
+        func englishShift() {
+            let time = ProcessInfo.processInfo.systemUptime
+            for (flags, stamp) in [(NSEvent.ModifierFlags.shift, time), (NSEvent.ModifierFlags(), time + 0.05)] {
+                let event = NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: flags, timestamp: stamp, windowNumber: 0, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 56)!
+                _ = englishSession.process(event, client: englishClient)
+            }
+        }
+        for englishDefault in [false, true] {
+            Preferences.shared.directEnglish = false; Preferences.shared.englishDefault = englishDefault
+            englishClient.text = ""; englishClient.caret = 0; englishSession.begin(englishClient)
+            for c in "make" { _ = englishKey(String(c)) }
+            englishShift()
+            check(englishClient.text == "make" && englishClient.marked.location == NSNotFound, "Shift commits literal make instead of accepting Chinese candidate, independent of output default")
+            check(Preferences.shared.directEnglish && FloatingPanel.shared.model.source == "make", "Shift preserves literal word in translation context and enters English mode")
+            englishSession.end(englishClient)
+        }
+        Preferences.shared.directEnglish = false; Preferences.shared.englishDefault = false
+        englishClient.text = ""; englishClient.caret = 0; englishSession.begin(englishClient)
+        for c in "yinwei" { _ = englishKey(String(c)) }; _ = englishKey(" ", code: 49)
+        for c in "make" { _ = englishKey(String(c)) }
+        englishShift()
+        check(englishClient.text == "因为make" && FloatingPanel.shared.model.source == "因为make", "Shift keeps earlier Chinese and raw English in the same sentence")
+        englishShift()
+        for c in "banben" { _ = englishKey(String(c)) }; _ = englishKey(" ", code: 49)
+        check(englishClient.text == "因为make版本" && FloatingPanel.shared.model.source == englishClient.text, "Pinyin resumes after literal Shift without losing mixed sentence")
+        englishSession.end(englishClient)
         Preferences.shared.directEnglish = false; Preferences.shared.englishDefault = false
         englishClient.text = ""; englishClient.caret = 0; englishSession.begin(englishClient)
         for c in "shi" { _ = englishKey(String(c)) }
