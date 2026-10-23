@@ -3,6 +3,8 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <limits>
+#include <cmath>
 #include <string>
 #include <vector>
 #define ORT_API_MANUAL_INIT
@@ -79,6 +81,27 @@ class TranslationModel {
         if (cancelled())
             return {};
         auto input = source;
+        // Isolated greetings are ambiguous to the small multilingual model.
+        // Exact whole-input matches only; never rewrite words inside a sentence.
+        if (targetLanguage_ >= 0) {
+            std::string greeting = source;
+            std::transform(greeting.begin(), greeting.end(), greeting.begin(), [](unsigned char c) { return c >= 'A' && c <= 'Z' ? c + 32 : c; });
+            auto begin = greeting.find_first_not_of(" \t\r\n");
+            auto end = greeting.find_last_not_of(" \t\r\n.!?");
+            if (begin != std::string::npos && end != std::string::npos) greeting = greeting.substr(begin,end-begin+1);
+            if (greeting == "hi" || greeting == "hello" || greeting == "hey") return "你好";
+            for (const auto &prefix : {std::string("hi "), std::string("hello "), std::string("hey "), std::string("hi, "), std::string("hello, "), std::string("hey, ")}) {
+                if (begin == 0 && greeting.rfind(prefix, 0) == 0) {
+                    auto rest = translate(source.substr(prefix.size()), cancelled);
+                    return rest.empty() ? std::string{} : "你好，" + rest;
+                }
+            }
+
+        }
+        // Give fragmentary English the sentence boundary expected by Marian.
+        if (targetLanguage_ >= 0 && !input.empty() &&
+            ((input.back() >= 'a' && input.back() <= 'z') || (input.back() >= 'A' && input.back() <= 'Z')))
+            input += ".";
         const char *value = input.c_str();
         int64_t one = 1;
         auto text = Ort::Value::CreateTensor(allocator_, &one, 1, ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING);
@@ -108,33 +131,61 @@ class TranslationModel {
         const char *ei[] = {"input_ids", "attention_mask"};
         const char *eo[] = {"last_hidden_state"};
         auto hidden = encoder_.Run(Ort::RunOptions{nullptr}, ei, inputs.data(), 2, eo, 1);
-        std::vector<int64_t> output{65000};
-        std::string english;
+        struct Beam { std::vector<int64_t> tokens; double score; bool done; };
+        std::vector<Beam> beams{{{65000}, 0, false}};
         const char *di[] = {"input_ids", "encoder_attention_mask", "encoder_hidden_states"};
         const char *dout[] = {"logits"};
-        for (int step = 0; step < 128; step++) {
-            if (cancelled())
-                return {};
-            int64_t shape[] = {1, (int64_t)output.size()};
-            auto tokens = Ort::Value::CreateTensor<int64_t>(memory, output.data(), output.size(), shape, 2);
-            const OrtValue *values[] = {tokens, inputs[1], hidden[0]};
-            OrtValue *result = nullptr;
-            Ort::RunOptions run;
-            Ort::ThrowOnError(Ort::GetApi().Run(decoder_, run, di, values, 3, dout, 1, &result));
-            Ort::Value logits(result);
-            auto *scores = logits.GetTensorData<float>() + (output.size() - 1) * 65001;
-            size_t best = (size_t)(std::max_element(scores, scores + 65000) - scores);
-            if (best == 0) {
-                for (size_t p = english.find("▁"); p != std::string::npos; p = english.find("▁", p + 1))
-                    english.replace(p, 3, " ");
-                auto start = english.find_first_not_of(" \n\t");
-                if (start == std::string::npos)
-                    return {};
-                auto end = english.find_last_not_of(" \n\t");
-                return english.substr(start, end - start + 1);
+        auto rank = [](const Beam &b) { return b.score; };
+        for (int step = 0; step < 128; ++step) {
+            std::vector<Beam> next;
+            for (auto &beam : beams) {
+                if (cancelled()) return {};
+                if (beam.done) { next.push_back(beam); continue; }
+                auto &output = beam.tokens;
+                int64_t shape[] = {1, (int64_t)output.size()};
+                auto tokens = Ort::Value::CreateTensor<int64_t>(memory, output.data(), output.size(), shape, 2);
+                const OrtValue *values[] = {tokens, inputs[1], hidden[0]};
+                OrtValue *result = nullptr;
+                Ort::RunOptions run;
+                Ort::ThrowOnError(Ort::GetApi().Run(decoder_, run, di, values, 3, dout, 1, &result));
+                Ort::Value logits(result);
+                auto *scores = logits.GetTensorData<float>() + (output.size()-1)*65001;
+                double maximum = *std::max_element(scores, scores+65000), sum = 0;
+                for(size_t i=0;i<65000;++i) sum += std::exp(scores[i]-maximum);
+                double normalizer = maximum + std::log(sum);
+                std::vector<float> adjusted(scores,scores+65000);
+                // Prevent decoder loops without deleting genuine source repetitions.
+                if(output.size()>=4) for(size_t i=1;i+3<output.size();++i)
+                    if(output[i]==output[output.size()-3] && output[i+1]==output[output.size()-2] && output[i+2]==output.back())
+                        adjusted[output[i+3]]=-std::numeric_limits<float>::infinity();
+                for(int k=0;k<4;++k) {
+                    size_t best=std::max_element(adjusted.begin(),adjusted.end())-adjusted.begin();
+                    Beam candidate=beam;
+                    candidate.tokens.push_back(best);
+                    candidate.score += adjusted[best]-normalizer;
+                    candidate.done=best==0;
+                    next.push_back(std::move(candidate));
+                    adjusted[best]=-std::numeric_limits<float>::infinity();
+                }
             }
-            english += vocab_[best] == "<unk>" ? "�" : vocab_[best];
-            output.push_back((int64_t)best);
+            std::sort(next.begin(),next.end(),[&](const Beam&a,const Beam&b){return rank(a)>rank(b);});
+            if(next.size()>4) next.resize(4);
+            beams=std::move(next);
+            if(beams.front().done) {
+                std::string text;
+                for(size_t i=1;i+1<beams.front().tokens.size();++i) {
+                    auto &piece=vocab_[beams.front().tokens[i]];
+                    text += piece=="<unk>" ? "�" : piece;
+                }
+                for(size_t p=text.find("▁");p!=std::string::npos;p=text.find("▁",p+1))text.replace(p,3," ");
+                if (targetLanguage_ >= 0) {
+                    for (const auto &pattern : {std::string("。 。"), std::string("。。")})
+                        for (size_t p=text.find(pattern); p!=std::string::npos; p=text.find(pattern)) text.replace(p,pattern.size(),"。");
+                }
+                auto start=text.find_first_not_of(" \n\t");
+                if(start==std::string::npos)return {};
+                return text.substr(start,text.find_last_not_of(" \n\t")-start+1);
+            }
         }
         throw std::length_error("Sentence too long");
     }

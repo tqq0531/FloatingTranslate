@@ -672,6 +672,22 @@ class TextService : public ITfTextInputProcessorEx,
                 }
             }
         }
+        if (!valid && view == nullptr) {
+            // Search/CoreText can return TS_E_NOLAYOUT while composition is
+            // changing and expose no Win32 caret. Use the active TSF view's
+            // screen extent until its next layout notification supplies a caret.
+            ITfContextView *fallback = nullptr;
+            if (SUCCEEDED(context_->GetActiveView(&fallback))) {
+                RECT extent{};
+                if (SUCCEEDED(fallback->GetScreenExt(&extent)) &&
+                    extent.right > extent.left && extent.bottom > extent.top &&
+                    extent.bottom - extent.top <= 160) {
+                    rect = {extent.left, extent.top, extent.left + 1, extent.bottom};
+                    valid = true;
+                }
+                release(fallback);
+            }
+        }
         if (valid) {
             anchor_ = rect;
             haveAnchor_ = true;

@@ -14,8 +14,10 @@ int main(int argc,char** argv){
  assert(model.translate("已经取消的输入",[]{return true;}).empty());
  std::string longText;for(int i=0;i<500;i++)longText+="你好北京";bool rejected=false;try{model.translate(longText,[]{return false;});}catch(const std::length_error&){rejected=true;}assert(rejected);
  fuyi::TranslationModel reverse;reverse.load(std::filesystem::path(argv[1])/"en-zh",argv[3],true);
- for(auto text:{"Hello.","Have you worked out today?","How are you?","I want go to gym now","I want to go to the gym now"}){
+ for(auto text:{"hi","Hi my name is Jack","Hello.","Have you worked out today?","How are you?","I want go to gym now","I want to go to the gym now"}){
   auto chinese=reverse.translate(text,[]{return false;});assert(!chinese.empty());
+  if(std::string(text)=="hi")assert(chinese=="你好");
+  if(std::string(text)=="Hi my name is Jack")assert(chinese=="你好，我的名字是杰克。");
   assert(std::any_of(chinese.begin(),chinese.end(),[](unsigned char c){return c>=0x80;}));
   std::cout<<text<<" -> "<<chinese<<"\n";
  }
