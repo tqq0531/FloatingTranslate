@@ -1,0 +1,12 @@
+English spelling-frequency data, unmodified en_50k.txt (2018).
+Copyright Hermit Dave / FrequencyWords contributors.
+Source: https://github.com/hermitdave/FrequencyWords
+Revision: 525f9b560de45753a5ea01069454e72e9aa541c6
+Path: content/2018/en/en_50k.txt
+SHA256: 5351ff405b1126ef555791dd4d9798a48e3e9a501a9fc481a9da957752cfb458
+Content license: CC BY-SA 4.0. Full license included alongside this notice.
+Original data derived from subtitle word frequencies; this is not a complete
+lexicographic spelling dictionary. FloatingTranslate reads ASCII words/counts
+in memory and suggests only unambiguous edit-distance-one replacements.
+The frequency data itself is not modified. Local grammar rules are separate
+FloatingTranslate code. No affiliation or endorsement is implied.

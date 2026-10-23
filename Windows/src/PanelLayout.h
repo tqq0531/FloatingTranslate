@@ -20,7 +20,8 @@ struct ChoiceLayout {
 struct PanelLayout {
     int width = 0, height = 0, contentHeight = 0, divider = 0;
     Rect copy{};
-    std::vector<TextLine> english;
+    std::vector<TextLine> english, proof;
+    Rect applyAdvice{}, copyAdvice{};
     std::vector<ChoiceLayout> choices;
 };
 using MeasureText = std::function<int(const std::wstring &, size_t, size_t, PanelFont)>;
@@ -54,7 +55,7 @@ inline std::vector<TextLine> wrapPanelText(const std::wstring &text, int width, 
 }
 inline PanelLayout layoutPanel(const std::wstring &text, const std::vector<Candidate> &candidates,
                                size_t selected, int dpi, int maxWidth, int maxHeight,
-                               const MeasureText &measure) {
+                               const MeasureText &measure, const std::wstring &advice=L"") {
     const auto d = [dpi](int v) { return (v * dpi + 48) / 96; };
     PanelLayout out;
     maxWidth = std::max(d(80), std::min(d(440), maxWidth));
@@ -69,6 +70,7 @@ inline PanelLayout layoutPanel(const std::wstring &text, const std::vector<Candi
     for (size_t i = first; i < last; ++i)
         total += std::max(d(36), measure(candidates[i].text, 0, candidates[i].text.size(), PanelFont::Candidate) + d(26)) + d(4);
     if (last > first) desired = std::max(desired, total - d(4));
+    if(!advice.empty())desired=std::max(desired,d(204));
     out.width = std::min(desired, maxWidth);
     out.copy = {out.width - d(29), d(6), out.width - d(7), d(28)};
     out.english = wrapPanelText(text, std::max(d(8), out.width - d(64)), d(18), PanelFont::English, measure);
@@ -99,6 +101,16 @@ inline PanelLayout layoutPanel(const std::wstring &text, const std::vector<Candi
             rowHeight = std::max(rowHeight, boxHeight); x += boxWidth + d(4);
         }
         y += rowHeight + d(6);
+    }
+    if(!advice.empty()) {
+        y+=d(7);
+        out.proof=wrapPanelText(advice,std::max(d(20),out.width-d(24)),d(18),PanelFont::English,measure);
+        for(auto &line:out.proof){line.rect.left+=d(12);line.rect.right+=d(12);line.rect.top+=y;line.rect.bottom+=y;}
+        y+=int(out.proof.size())*d(18)+d(6);
+        int half=std::max(d(24),(out.width-d(28))/2);
+        out.applyAdvice={d(10),y,d(10)+half,y+d(25)};
+        out.copyAdvice={d(18)+half,y,out.width-d(10),y+d(25)};
+        y+=d(32);
     }
     out.contentHeight = y;
     out.height = std::min(y, maxHeight);

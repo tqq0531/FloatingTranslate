@@ -44,7 +44,9 @@ class Panel {
     HFONT font_ = nullptr, small_ = nullptr, candidateFont_ = nullptr;
     int scale_ = 96, width_ = 136, height_ = 34, scroll_ = 0;
     PanelLayout layout_;
-    std::wstring english_, status_, raw_;
+    std::wstring english_, status_, raw_, correction_, advice_;
+    std::vector<TextLine> proofLines_;
+    RECT applyRect_{}, proofCopyRect_{};
     std::vector<Candidate> candidates_;
     size_t selected_ = 0, selA_ = 0, selB_ = 0;
     bool dragging_ = false, copyHover_ = false, toChinese_ = false;
@@ -86,8 +88,11 @@ class Panel {
             GetTextExtentPoint32W(dc, text.data() + start, (int)count, &size);
             return (int)size.cx;
         };
-        layout_ = layoutPanel(english_.empty() ? status_ : english_, candidates_, selected_,
-                              scale_, maxWidth, maxHeight, measure);
+        layout_ = layoutPanel(english_.empty()?status_:english_, candidates_, selected_,
+                              scale_,maxWidth,maxHeight,measure,correction_.empty()?L"":L"基础纠错建议: "+correction_);
+        proofLines_=layout_.proof;
+        applyRect_={layout_.applyAdvice.left,layout_.applyAdvice.top,layout_.applyAdvice.right,layout_.applyAdvice.bottom};
+        proofCopyRect_={layout_.copyAdvice.left,layout_.copyAdvice.top,layout_.copyAdvice.right,layout_.copyAdvice.bottom};
         width_ = layout_.width; height_ = layout_.height; lines_ = layout_.english;
         copy_ = {layout_.copy.left, layout_.copy.top, layout_.copy.right, layout_.copy.bottom};
         if (tooltip_) {
@@ -205,6 +210,17 @@ class Panel {
             for (const auto &line : choice.lines)
                 TextOutW(back, line.rect.left, line.rect.top - scroll_, value.data() + line.start, (int)line.length);
         }
+        if(!correction_.empty()) {
+            const auto proof=L"基础纠错建议: "+correction_;
+            SelectObject(back,font_);SetTextColor(back,RGB(65,104,140));
+            for(const auto &line:proofLines_) if(line.rect.bottom-scroll_>0&&line.rect.top-scroll_<height_)
+                TextOutW(back,line.rect.left,line.rect.top-scroll_,proof.data()+line.start,(int)line.length);
+            for(auto item:{std::pair<RECT,const wchar_t*>{applyRect_,L"采用建议"},{proofCopyRect_,L"复制建议"}}){
+                auto rect=item.first;OffsetRect(&rect,0,-scroll_);
+                surface(back,rect,d(8),RGB(231,238,247),RGB(222,232,246));
+                DrawTextW(back,item.second,-1,&rect,DT_CENTER|DT_VCENTER|DT_SINGLELINE);
+            }
+        }
         // A compact two-paper copy glyph, like the Mac panel; no wide text button.
         if (copyHover_)
             surface(back, copy_, d(8), RGB(226, 234, 245), RGB(226, 234, 245));
@@ -251,6 +267,13 @@ class Panel {
             paint();
             return 0;
         case WM_LBUTTONDOWN:
+            if(!correction_.empty()) {
+                POINT logical=point;logical.y+=scroll_;
+                if(PtInRect(&applyRect_,logical)){if(applyCorrection)applyCorrection();return 0;}
+                if(PtInRect(&proofCopyRect_,logical)){
+                    pendingCopy_=correction_;copyAttempts_=0;attemptCopy();return 0;
+                }
+            }
             if (onCopy(point)) {
                 copy();
                 return 0;
@@ -329,6 +352,7 @@ class Panel {
 
   public:
     std::function<void(size_t)> choose;
+    std::function<void()> applyCorrection;
     Panel() {
         WNDCLASSW wc = {};
         wc.lpfnWndProc = proc;
@@ -366,7 +390,12 @@ class Panel {
             DeleteObject(small_);
         if (candidateFont_) DeleteObject(candidateFont_);
     }
+    void setOwner(HWND owner) {
+        if(window_ && owner && owner!=window_ && IsWindow(owner))
+            SetWindowLongPtrW(window_,GWLP_HWNDPARENT,(LONG_PTR)owner);
+    }
     void hide() {
+        if(window_ && IsWindowVisible(window_))NotifyWinEvent(EVENT_OBJECT_IME_HIDE,window_,OBJID_CLIENT,CHILDID_SELF);
         pendingCopy_.clear();
         KillTimer(window_, copyRetryTimer);
         KillTimer(window_, copyFeedbackTimer);
@@ -378,6 +407,7 @@ class Panel {
         copyHover_ = false;
         scroll_ = 0;
         selA_ = selB_ = 0;
+        correction_.clear();advice_.clear();proofLines_.clear();english_.clear();status_.clear();
     }
     bool selecting() const {
         return dragging_ || !pendingCopy_.empty();
@@ -394,7 +424,7 @@ class Panel {
         attemptCopy();
     }
     void show(RECT anchor, const std::wstring &english, const std::wstring &status, const std::wstring &raw,
-              const std::vector<Candidate> &choices, size_t selected, bool above, bool toChinese = false) {
+              const std::vector<Candidate> &choices, size_t selected, bool above, bool toChinese = false, const std::wstring &correction=L"", const std::wstring &advice=L"") {
         if (!window_)
             return;
         if (english_ != english) {
@@ -403,6 +433,8 @@ class Panel {
             selA_ = selB_ = 0;
             scroll_ = 0;
         }
+        if(correction_!=correction){KillTimer(window_,copyRetryTimer);pendingCopy_.clear();}
+        correction_=correction;advice_=advice;
         toChinese_ = toChinese;
         bool selectionChanged = selected_ != selected;
         english_ = english;
@@ -449,7 +481,9 @@ class Panel {
         if (shape && !SetWindowRgn(window_, shape, FALSE)) DeleteObject(shape);
         SetWindowPos(window_, HWND_TOPMOST, r->left, r->top, width_, height_, SWP_NOACTIVATE);
         RedrawWindow(window_, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
+        bool wasVisible=IsWindowVisible(window_)!=FALSE;
         ShowWindow(window_, SW_SHOWNOACTIVATE);
+        NotifyWinEvent(wasVisible?EVENT_OBJECT_IME_CHANGE:EVENT_OBJECT_IME_SHOW,window_,OBJID_CLIENT,CHILDID_SELF);
     }
 };
 } // namespace fuyi

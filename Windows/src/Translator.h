@@ -1,5 +1,6 @@
 #pragma once
 #include "ModelChecks.h"
+#include "EnglishProofreader.h"
 #include "TranslationModel.h"
 #include "WinUtil.h"
 #include <bcrypt.h>
@@ -92,7 +93,7 @@ class Translator {
 };
 struct TranslationResult {
     uint64_t token = 0, ticket = 0;
-    std::wstring source, text, status;
+    std::wstring source, text, status, correction, advice;
     bool toChinese = false;
 };
 constexpr UINT WM_TRANSLATED = WM_APP + 101;
@@ -113,6 +114,8 @@ class TranslationWorker {
     std::optional<Job> pending_;
     void run() {
         Translator engine;
+        EnglishProofreader proofreader;
+        bool proofreadingReady = proofreader.load(directory()/L"Proofreading"/L"en_50k.txt");
         for (;;) {
             Job job;
             {
@@ -140,6 +143,14 @@ class TranslationWorker {
             result->source = job.source;
             result->toChinese = job.toChinese;
             try {
+                if(job.toChinese) {
+                    auto advice = proofreader.check(job.source);
+                    if(advice.corrected != job.source) {
+                        result->correction = std::move(advice.corrected);
+                        result->advice = L"基础纠错建议（请核对）";
+                        for(const auto &note:advice.notes) result->advice += L" · " + note;
+                    } else if(!proofreadingReady) result->advice=L"拼写词表不可用；仅提供常见语法规则";
+                }
                 result->text = engine.translate(job.source, cancelled, job.toChinese);
             } catch (const std::length_error &) {
                 result->status = L"句子较长，请分句输入";

@@ -1,7 +1,24 @@
-# 浮译 Windows · 0.1.5 开发试用版
+# 浮译 Windows · 0.1.6 开发试用版
 
 Windows 原生 TSF 输入法，中文拼音使用与 Mac 相同的 Rime 1.17.0 词库和方案，中英双向翻译使用完整内置的 OPUS-MT / ONNX 本地模型。
 
+
+## 0.1.6 搜索兼容、续写与基础纠错 / Search, continuation and basic proofreading
+
+- 安装时对**已校验的浮译组件及目录**明确设置只读/执行权限，支持 AppContainer 与受限应用包。共享开关目录也增加受限包只读权限；不开放桌面、用户文档或 AppData。普通用户和沙箱均不能修改 Program Files 内组件。
+- 候选窗绑定当前宿主窗口，并发送 IME 显示/隐藏/变化通知，避免搜索面板的轻关闭机制误判；系统键盘打开状态在激活时明确设置；按键测试时绑定宿主提供的输入上下文；字典暂未就绪不再让整个服务激活失败。受限宿主读取共享设置避免额外验证不可读的父目录，无法读取仍保持隐私模式。
+- 英文原文确认后保留当前句子的范围和内存文本；后续 ` gym now` 累计为 `I want go to gym now`。宿主自行结束组合时，只保留与已输入原文相符且没有确定移动光标的范围；外部改动、隐私、真正换框/移动、句末或超时仍清理。不扫描文档前文。
+- 新增离线**基础**英文纠错建议：约五万项随包词频数据用于保守的单字符拼写候选，另有常见语法规则。示例：`I want go to gym now` → `I want to go to the gym now`；`wnat`、`teh` 等可给出建议。当前未完成单词不进行拼写替换，URL/邮箱/路径/代码样式跳过。词频数据含字幕用词，不能当作完整标准词典。
+- 浮窗同时显示中文译文及“基础纠错建议”。“采用建议”只在当前同一句与范围仍可信时改写英文；“复制建议”只写剪贴板。顶部复制仍复制中文译文。默认不擅自改变正文，翻译按原文进行，采用建议后重新翻译。
+- 此功能**不是完整语法检查器**：不能保证查出时态、复杂从句、用词、语义或所有拼写错误；真实词的误用和专名可能漏报/误报，没出现建议不代表英文完全正确。
+
+After activation, run **刷新Windows搜索.cmd** once if Search was already open with an old build. It stops only SearchHost/SearchApp/SearchUI in the current session; Windows recreates Search when opened. It does not close the browser, editor, Explorer, disable isolation or modify unrelated input methods. Reopen Search and select FloatingTranslate with Win+Space. **检查搜索框权限.cmd** inspects read-only ACLs on the installed runtime and preferences without reading input text. Passing ACL checks does not establish actual host compatibility.
+
+Version 0.1.6 adds explicit read-only ACLs for verified runtime components and restricted app packages, keyboard-open initialization and key-context binding. English source commits and verified external composition ends retain the current sentence for continuation. Offline basic proofreading combines bundled frequency data and common grammar rules, shown separately with explicit Apply/Copy actions. It is not a comprehensive grammar checker. It can miss or misidentify errors and names; no suggestion does not certify correctness. Original prose, suggestions and translations remain in memory, never in candidate-use records. No cloud requests or runtime downloads are added. Actual Windows Search, TSF continuation, correction clicks and ACL changes still require user validation.
+
+升级：先切到微软拼音，停用旧版并保存正在编辑的文字；完整解压新包，运行“启用浮译.cmd”，再运行“刷新Windows搜索.cmd”。已经加载旧 DLL 的普通软件请保存后正常重开。新副本在 `%ProgramFiles%\FloatingTranslate\0.1.6`。
+
+参考：[Microsoft IME requirements](https://learn.microsoft.com/en-us/windows/apps/develop/input/input-method-editor-requirements)、[AppContainer/LPAC](https://learn.microsoft.com/en-us/windows/win32/secauthz/implementing-an-appcontainer)。仅是针对性兼容修正，未将交叉编译当成系统搜索已修复的实机结论。
 
 ## 0.1.5 英译中 / Offline English-to-Chinese
 

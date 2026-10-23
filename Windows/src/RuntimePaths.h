@@ -40,7 +40,13 @@ inline std::filesystem::path knownFolder(REFKNOWNFOLDERID id) {
     std::filesystem::path result(text); CoTaskMemFree(text); return result;
 }
 inline std::filesystem::path sharedPreferencesRoot() {
-    return knownFolder(FOLDERID_ProgramData) / L"FloatingTranslate" / L"Preferences";
+    // SHGetKnownFolderPath may verify a restricted host's access to the parent
+    // even though our dedicated child directory has an explicit read ACL.
+    wchar_t path[32768]{};
+    DWORD count = GetEnvironmentVariableW(L"ProgramData",path,32768);
+    auto root = count && count < 32768 ? std::filesystem::path(path) : knownFolder(FOLDERID_ProgramData);
+    if(!root.is_absolute()) throw std::runtime_error("Invalid shared preference root");
+    return root / L"FloatingTranslate" / L"Preferences";
 }
 inline std::filesystem::path pinyinRuntime() {
     std::filesystem::path base;

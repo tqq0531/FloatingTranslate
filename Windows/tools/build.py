@@ -13,6 +13,7 @@ for folder in [OUT/'models',OUT/'models/en-zh']:
    raise RuntimeError('Invalid bundled model: '+str(p))
   checks.append((p.relative_to(OUT/'models').as_posix(),entry['sha256']))
 (BUILD/'include/ModelChecks.h').write_text('#pragma once\nnamespace fuyi { struct ModelCheck {const wchar_t* file;const char* sha;};inline const ModelCheck modelChecks[]={\n'+''.join(' {L"'+name+'","'+sha+'"},\n' for name,sha in checks)+'};}\n')
+if hashlib.sha256((OUT/'Proofreading/en_50k.txt').read_bytes()).hexdigest()!='5351ff405b1126ef555791dd4d9798a48e3e9a501a9fc481a9da957752cfb458':raise RuntimeError('Invalid proofreading dictionary')
 run([RC,'-i','app.rc','-o',BUILD/'app.res'],cwd=ROOT/'assets')
 common=[CXX,'-std=c++17','-ffile-prefix-map='+str(ROOT)+'=Windows','-O2','-g0','-static','-DUNICODE','-D_UNICODE','-D_WIN32_WINNT=0x0A00','-I',BUILD/'include','-I',ROOT/'src','-Wl,--no-insert-timestamp','-Wl,--dynamicbase','-Wl,--nxcompat']
 libs=['-lole32','-loleaut32','-luuid','-luser32','-lgdi32','-lshell32','-ladvapi32','-lbcrypt','-lcomctl32','-lcrypt32']
@@ -23,7 +24,7 @@ run(common+[ROOT/'tests/core_test.cpp','-o',OUT/'FuyiCoreTest.exe'])
 # Checksums of every delivered file; no last-minute downloads on the user's PC.
 files=sorted(p for p in OUT.rglob('*') if p.is_file() and p.name!='SHA256SUMS.txt')
 (OUT/'SHA256SUMS.txt').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.relative_to(OUT).as_posix()+'\n' for p in files))
-zip_path=BUILD/'FloatingTranslate-Windows-0.1.5-x64-offline.zip'
+zip_path=BUILD/'FloatingTranslate-Windows-0.1.6-x64-offline.zip'
 with zipfile.ZipFile(zip_path,'w',zipfile.ZIP_DEFLATED,compresslevel=6) as z:
  for p in sorted(OUT.rglob('*')):
   if p.is_file():z.write(p,'FloatingTranslate/'+p.relative_to(OUT).as_posix())

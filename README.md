@@ -75,3 +75,7 @@ Third-party components retain their own licenses: Rime BSD, Pinyin dictionaries 
 Windows 开发分支 0.1.5 新增内置英译中模型，以及独立的“英文转换后默认输出中文”设置；英文模式按回车提交默认语言，Tab 提交另一语言。公开 Release 表中的版本仍是已发布版本。
 
 Windows development branch 0.1.5 adds bundled English-to-Chinese translation and an independent Chinese-default output preference. Enter commits the default language; Tab commits the alternative. The release table above lists previously published packages.
+
+Windows 开发分支 0.1.6：修正受限宿主的组件只读权限、增加搜索刷新/权限检查工具；英文确认后追加词语继续按整句翻译。新增本地基础语法与拼写建议，明确采用/复制，非完整语法检查器。实际 Windows 搜索与宿主输入仍待用户验收。
+
+Windows development branch 0.1.6 adds restricted-host runtime read permissions, Search refresh/ACL inspection tools, English sentence continuation and explicit offline basic proofreading suggestions. This is not a comprehensive grammar checker. Actual Search and application-host validation remains pending.

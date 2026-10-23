@@ -32,12 +32,13 @@ def audit(path):
  with zipfile.ZipFile(path) as z:
   assert z.testzip() is None,'ZIP CRC mismatch'
   names=set(z.namelist());root='FloatingTranslate/'
-  required=['FuyiIME.dll','FuyiSettings.exe','FuyiCheck.exe','FuyiCoreTest.exe','librime.dll','onnxruntime.dll','ortextensions.dll','vc_redist.x64.exe','启用浮译.cmd','停用浮译.cmd','使用说明.txt','RimeData/build/fuyi.schema.yaml','RimeData/build/pinyin_simp.table.bin','licenses/CC-BY-4.0.txt','licenses/TRANSLATION-NOTICE.txt','licenses/OPUS-MT-EN-ZH-APACHE-2.0.txt','licenses/OPUS-MT-EN-ZH-NOTICE.txt']
+  required=['FuyiIME.dll','FuyiSettings.exe','FuyiCheck.exe','FuyiCoreTest.exe','librime.dll','onnxruntime.dll','ortextensions.dll','vc_redist.x64.exe','启用浮译.cmd','停用浮译.cmd','使用说明.txt','RimeData/build/fuyi.schema.yaml','RimeData/build/pinyin_simp.table.bin','licenses/CC-BY-4.0.txt','licenses/TRANSLATION-NOTICE.txt','licenses/OPUS-MT-EN-ZH-APACHE-2.0.txt','licenses/OPUS-MT-EN-ZH-NOTICE.txt','licenses/FREQUENCYWORDS-CC-BY-SA-4.0.txt','licenses/FREQUENCYWORDS-NOTICE.txt','Proofreading/en_50k.txt','检查搜索框权限.cmd','刷新Windows搜索.cmd']
   for name in required:assert root+name in names,'Missing '+name
   sums=z.read(root+'SHA256SUMS.txt').decode().splitlines()
   for line in sums:
    sha,name=line.split('  ',1);assert hashlib.sha256(z.read(root+name)).hexdigest()==sha,'Corrupt '+name
   assert len(sums)==len(names)-1,'Unlisted files in package'
+  assert hashlib.sha256(z.read(root+'Proofreading/en_50k.txt')).hexdigest()=='5351ff405b1126ef555791dd4d9798a48e3e9a501a9fc481a9da957752cfb458','Proofreading dictionary mismatch'
   for model_dir in ['models/','models/en-zh/']:
    models=json.loads(z.read(root+model_dir+'manifest.json'))
    assert len(models['files'])==5,'Incomplete model bundle'

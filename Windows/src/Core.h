@@ -17,6 +17,11 @@ struct Candidate {
 };
 // An unavailable TSF range is not evidence that the user moved the caret.
 enum class RangeEvidence { Unknown, Matches, Different };
+inline bool retainEnglishPrefix(bool englishInput, bool blocked, RangeEvidence text,
+                                RangeEvidence caret, RangeEvidence prefix) {
+    return englishInput && !blocked && text==RangeEvidence::Matches &&
+           caret!=RangeEvidence::Different && prefix!=RangeEvidence::Different;
+}
 inline bool breaksSentence(RangeEvidence caret, RangeEvidence prefix) {
     return caret == RangeEvidence::Different || prefix == RangeEvidence::Different;
 }

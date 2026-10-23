@@ -1,7 +1,27 @@
-# Windows 0.1.5 测试边界与验收清单
+# Windows 0.1.6 测试边界与验收清单
 
 日期：2026-10-23。当前开发主机为 macOS / Apple Silicon，交叉编译 Windows x64。**尚未在真实 Windows 系统完成输入服务与宿主应用验收。** 此包供指定测试人员试用，不应按“与 Mac 一样成熟稳定”对外宣传。
 
+
+## 0.1.6 开发验证与用户验收 / Checks and host validation
+
+本机已实际运行同一份词典纠错和语法实现：`I wnat go to teh gym now ` → `I want to go to the gym now `；正确示例、URL、代码样式和未完成词保持。核心检查覆盖隐私/非英文/文字改变/光标移动/前缀改变时拒绝保留旧组合。共享模型实际输出 `I want go to gym now` 及修正后的整句 → `我现在要去健身房`。
+
+纠错区域采用与原生窗口共用的纯布局实现，在 100%、125%、150%、200%、250% DPI 检查建议文字完整换行、采用/复制按钮不重叠且在边界内。该检查不代表 Windows 原生绘制已验收。
+
+搜索候选窗新增宿主 owner 和 IME 显示/隐藏/变化事件；Windows 搜索面板的轻关闭与焦点行为也待用户验收。
+
+本轮编译四个 x64 二进制，审计 ZIP、全部文件、双向模型、词表校验、PE 导出与依赖。没有 Windows 可执行文件或系统搜索实机通过结论；代码和核心策略检查不能验证 TSF 宿主。
+
+Windows 用户重点验收：
+
+1. 保存编辑文字，切到微软拼音，停用旧版；启用完整 0.1.6，运行刷新Windows搜索.cmd，再打开搜索并 Win+空格选浮译。输入 nihao 空格得到“你好”；用检查搜索框权限.cmd 核对已安装副本读权限。脚本会重启 SearchHost/SearchApp/SearchUI，当前搜索查询会关闭。
+2. 英文默认原文：输入 I want go to，回车，继续空格 gym now，检查译文使用整句。整句一次输入、宿主结束组合再追加、退格、句号和二次回车换行分别检查。
+3. 修改前缀、移走光标、换框、进入隐私/密码输入后不能把旧句拼入新句，不得替换无关正文。未知范围可只预览，采用建议要求可信范围。
+4. 观察基础纠错行，顶部复制为中文，复制建议为英文。采用后重新翻译；未采用时原文保持。译文或输入框变化后不得采用/复制过期建议；剪贴板繁忙仍重试并反馈。
+5. 断网重复检查。不弹出在线纠错/下载请求；专名、真实词误用、复杂时态仍可能漏报/误报。手动核对建议，不要用真实密码测试。
+
+Portable tests verify dictionary-backed edits, bounded common grammar rules, conservative skips and English-prefix retention policy. Shared inference tests verify both model directions and the complete reported gym sentence. Windows Search, ACL mutation, TSF range semantics and native correction controls remain user-test items. This is a basic offline assistant, not a complete grammar checker.
 
 ## 0.1.5 双向翻译验收 / Bidirectional translation
 

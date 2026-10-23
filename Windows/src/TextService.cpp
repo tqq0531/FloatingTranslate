@@ -215,7 +215,7 @@ class TextService : public ITfTextInputProcessorEx,
     ShiftTap shift_;
     Sentence sentence_;
     std::string raw_;
-    std::wstring locked_, english_, translatedSource_, requestedSource_, status_;
+    std::wstring locked_, english_, translatedSource_, requestedSource_, status_, correction_, advice_;
     std::vector<Candidate> candidates_;
     size_t selected_ = 0;
     RECT anchor_{};
@@ -239,6 +239,7 @@ class TextService : public ITfTextInputProcessorEx,
                     self->english_ = r->text;
                     self->translatedSource_ = r->source;
                     self->status_ = r->status;
+                    self->correction_ = r->correction; self->advice_ = r->advice;
                     self->draw();
                 }
                 return 0;
@@ -327,7 +328,7 @@ class TextService : public ITfTextInputProcessorEx,
     void cancel() {
         ++revision_;
         target_->generation = revision_;
-        english_.clear();
+        english_.clear();correction_.clear();advice_.clear();
         translatedSource_.clear();
         requestedSource_.clear();
     }
@@ -651,6 +652,9 @@ class TextService : public ITfTextInputProcessorEx,
         BOOL clipped = FALSE;
         bool valid = false;
         if (range && SUCCEEDED(context_->GetActiveView(&view))) {
+            HWND owner=nullptr;
+            if(FAILED(view->GetWnd(&owner)) || !owner)owner=GetFocus();
+            if(panel_)panel_->setOwner(owner);
             range->Collapse(ec, TF_ANCHOR_END);
             valid = SUCCEEDED(view->GetTextExt(ec, range, &rect, &clipped)) && !clipped &&
                     rect.bottom > rect.top && rect.bottom - rect.top < 500;
@@ -682,7 +686,7 @@ class TextService : public ITfTextInputProcessorEx,
             return;
         }
         panel_->show(anchor_, english_, status_, locked_ + wide(raw_), candidates_, selected_,
-                     options_.above, options_.direct);
+                     options_.above, options_.direct, correction_, advice_);
     }
     HRESULT refresh(TfEditCookie ec) {
         candidates_ = pinyin().query(raw_);
@@ -734,13 +738,14 @@ class TextService : public ITfTextInputProcessorEx,
         translate();
         geometry(ec);
     }
-    void commit(TfEditCookie ec, bool english) {
+    void commit(TfEditCookie ec, bool english, bool keepEnglishSource=false) {
         if (!english) {
             chinese(ec);
             return;
         }
         auto part = fragment();
         auto full = source();
+        auto output = english_;
         if (!part || full != translatedSource_ || english_.empty()) {
             status_ = part ? L"整句译文尚未就绪，请稍候" : L"请先完成输入";
             draw();
@@ -756,14 +761,14 @@ class TextService : public ITfTextInputProcessorEx,
                 !selectionAtEnd(ec, compositionRange) || FAILED(sentenceRange_->Clone(&span))) {
                 release(compositionRange);
                 release(span);
-                status_ = L"无法安全替换前文，请复制英文或输入中文";
+                status_ = L"无法安全替换整句，请复制译文或纠错建议";
                 draw();
                 return;
             }
             if (FAILED(span->ShiftEndToRange(ec, compositionRange, TF_ANCHOR_END))) {
                 release(compositionRange);
                 release(span);
-                status_ = L"无法安全替换前文，请复制英文";
+                status_ = L"无法安全替换整句，请复制译文或纠错建议";
                 draw();
                 return;
             }
@@ -779,13 +784,15 @@ class TextService : public ITfTextInputProcessorEx,
                 composition->Release();
                 selectEnd(ec, span);
                 clear();
+                if(keepEnglishSource){sentence_.append(output,GetTickCount64());span->Clone(&sentenceRange_);if(sentenceRange_)sentenceRange_->SetGravity(ec,TF_GRAVITY_FORWARD,TF_GRAVITY_BACKWARD);translate();geometry(ec);}
             }
             span->Release();
         } else {
             auto range = commitText(ec, english_);
             if (range) {
-                range->Release();
                 clear();
+                if(keepEnglishSource){sentence_.append(output,GetTickCount64());range->Clone(&sentenceRange_);if(sentenceRange_)sentenceRange_->SetGravity(ec,TF_GRAVITY_FORWARD,TF_GRAVITY_BACKWARD);translate();geometry(ec);}
+                range->Release();
             }
         }
     }
@@ -808,6 +815,9 @@ class TextService : public ITfTextInputProcessorEx,
                (key >= VK_NUMPAD0 && key <= VK_DIVIDE);
     }
     bool englishKey(TfEditCookie ec, WPARAM code) {
+        if (!composing() && !sentence_.text.empty() &&
+            (sentence_.finished || sentence_.expired(GetTickCount64()) || prefixEvidence(ec) == RangeEvidence::Different ||
+             selectionEvidence(ec, sentenceRange_) == RangeEvidence::Different)) clear();
         if (code == VK_ESCAPE) {
             if (!composing()) return false;
             literal(ec); clear(); return true; // Cancel translation, keep typed English.
@@ -816,14 +826,23 @@ class TextService : public ITfTextInputProcessorEx,
             if (!composing()) { clear(); return false; }
             bool translated = translationOnCommit(true, options_.english, options_.chinese, code == VK_TAB);
             commit(ec, translated);
-            if (!composing()) clear();
+            // Committing the English source ends the marked span, not the
+            // sentence: later words must still translate with this prefix.
             return true;
         }
         if (code == VK_BACK) {
-            if (locked_.empty()) return false;
+            if (locked_.empty()) {
+                if (!sentence_.text.empty()) {
+                    sentence_.backspace(GetTickCount64()); expectEdit_ = true;
+                    translate(); geometry(ec);
+                }
+                return false;
+            }
             eraseLast(locked_);
             if (locked_.empty()) {
-                auto range = commitText(ec, L""); release(range); clear();
+                auto range = commitText(ec,L"");release(range);
+                if(sentence_.text.empty())clear();
+                else {translate();geometry(ec);}
             } else { marked(ec); translate(); geometry(ec); }
             return true;
         }
@@ -860,13 +879,13 @@ class TextService : public ITfTextInputProcessorEx,
             return composing() || !sentence_.text.empty() ||
                    (key == 'C' && panel_ && !panel_->selectedText().empty());
         if (options_.direct)
-            return composing() || shift_.armed || (key != VK_SPACE && printableEnglishKey(key));
+            return composing() || !sentence_.text.empty() || shift_.armed || (key != VK_SPACE && printableEnglishKey(key));
         if (GetKeyState(VK_CAPITAL) & 1)
             return composing() || !sentence_.text.empty() || shift_.armed;
         if (shift_.armed)
             return true;
         if ((key >= 'A' && key <= 'Z') && !(GetKeyState(VK_SHIFT) & 0x8000))
-            return pinyin().ready();
+            { try { return pinyin().ready() || pinyin().start(); } catch (...) { return false; } }
         return composing() || !sentence_.text.empty();
     }
     bool key(TfEditCookie ec, WPARAM code) {
@@ -1109,7 +1128,7 @@ class TextService : public ITfTextInputProcessorEx,
             return S_OK;
         try {
             pinModule();
-            pinyin().start();
+            try { pinyin().start(); } catch (...) {}
             WNDCLASSW wc = {};
             wc.lpfnWndProc = proc;
             wc.hInstance = module;
@@ -1133,7 +1152,34 @@ class TextService : public ITfTextInputProcessorEx,
                     },
                     false, true);
             };
+            panel_->applyCorrection=[this] {
+                auto expected=source(), correction=correction_;
+                if(!options_.direct||correction.empty())return;
+                request([this,expected,correction](TfEditCookie ec){
+                    if(sensitive(ec)||source()!=expected||correction_!=correction)return S_OK;
+                    // Only explicitly apply to the same verified sentence range.
+                    if(!composition_ && sentenceRange_) {
+                        if(prefixEvidence(ec)!=RangeEvidence::Matches || !selectionAtEnd(ec,sentenceRange_))return S_OK;
+                        if(SUCCEEDED(sentenceRange_->SetText(ec,0,correction.c_str(),(LONG)correction.size()))) {
+                            wroteText_=true;expectEdit_=true;selectEnd(ec,sentenceRange_);
+                            sentence_.text=correction;sentence_.touched=GetTickCount64();
+                            sentence_.finished=!correction.empty()&&std::wstring(L".!?\n").find(correction.back())!=std::wstring::npos;
+                            translate();geometry(ec);
+                        }
+                    } else {english_=correction;translatedSource_=expected;commit(ec,true,true);}
+                    return S_OK;
+                },false,true);
+            };
             SetTimer(messages_, 1, 150, nullptr);
+            ITfCompartmentMgr *compartments = nullptr;
+            if (SUCCEEDED(manager_->QueryInterface(IID_ITfCompartmentMgr,(void**)&compartments))) {
+                ITfCompartment *open = nullptr;
+                if(SUCCEEDED(compartments->GetCompartment(GUID_COMPARTMENT_KEYBOARD_OPENCLOSE,&open))) {
+                    VARIANT value;VariantInit(&value);value.vt=VT_I4;value.lVal=1;
+                    open->SetValue(client_,&value);open->Release();
+                }
+                compartments->Release();
+            }
             ITfKeystrokeMgr *keys = nullptr;
             if (FAILED(manager_->QueryInterface(IID_ITfKeystrokeMgr, (void **)&keys)))
                 return E_FAIL;
@@ -1240,10 +1286,11 @@ class TextService : public ITfTextInputProcessorEx,
         }
         return S_OK;
     }
-    HRESULT STDMETHODCALLTYPE OnTestKeyDown(ITfContext *, WPARAM key, LPARAM, BOOL *eaten) override {
+    HRESULT STDMETHODCALLTYPE OnTestKeyDown(ITfContext *context, WPARAM key, LPARAM, BOOL *eaten) override {
         if (!eaten)
             return E_POINTER;
-        *eaten = canHandle(key);
+        try { attach(context); *eaten = canHandle(key); }
+        catch (...) { *eaten = FALSE; }
         return S_OK;
     }
     HRESULT STDMETHODCALLTYPE OnKeyDown(ITfContext *context, WPARAM code, LPARAM, BOOL *eaten) override {
@@ -1342,10 +1389,25 @@ class TextService : public ITfTextInputProcessorEx,
         clear();
         return S_OK;
     }
-    HRESULT STDMETHODCALLTYPE OnCompositionTerminated(TfEditCookie, ITfComposition *terminated) override {
+    HRESULT STDMETHODCALLTYPE OnCompositionTerminated(TfEditCookie ec, ITfComposition *terminated) override {
         if (!closingComposition_ && terminated == composition_) {
-            release(composition_);
-            clear();
+            ITfRange *range = nullptr;
+            auto text = locked_ + wide(raw_);
+            bool retained = !text.empty() && SUCCEEDED(terminated->GetRange(&range)) &&
+                retainEnglishPrefix(options_.direct,sensitive(ec),rangeTextEvidence(ec,range,text),
+                                    selectionEvidence(ec,range),prefixEvidence(ec));
+            if (retained) {
+                bool prefix = !sentence_.text.empty();
+                LONG diff=1;
+                if (sentenceRange_ && SUCCEEDED(sentenceRange_->CompareEnd(ec,range,TF_ANCHOR_START,&diff)) && diff==0)
+                    {if(FAILED(sentenceRange_->ShiftEndToRange(ec,range,TF_ANCHOR_END)))release(sentenceRange_);}
+                else { release(sentenceRange_); if(!prefix)range->Clone(&sentenceRange_); }
+                if(sentenceRange_)sentenceRange_->SetGravity(ec,TF_GRAVITY_FORWARD,TF_GRAVITY_BACKWARD);
+                sentence_.append(text,GetTickCount64());
+                release(composition_);raw_.clear();locked_.clear();candidates_.clear();selected_=0;
+                translate(); geometry(ec);
+            } else { release(composition_); clear(); }
+            release(range);
         }
         return S_OK;
     }

@@ -1,10 +1,25 @@
 #include "../src/Core.h"
+#include "../src/EnglishProofreader.h"
 #include "../src/PanelLayout.h"
 #include "../src/CandidateRanking.h"
 #include <cassert>
 #include <iostream>
 using namespace fuyi;
 int main() {
+    EnglishProofreader proof;
+    auto advice=proof.check(L"I want go to gym now");
+    assert(advice.corrected==L"I want to go to the gym now");
+    assert(proof.check(L"I want to go to the gym now").corrected==L"I want to go to the gym now");
+    assert(proof.check(L"She have a apple").corrected==L"She has an apple");
+    assert(proof.check(L"i recieve teh book ").corrected==L"I receive the book ");
+    assert(proof.check(L"https://example.com/teh").corrected==L"https://example.com/teh");
+    assert(proof.check(std::wstring(1001,L'x')).corrected==std::wstring(1001,L'x'));
+    assert(retainEnglishPrefix(true,false,RangeEvidence::Matches,RangeEvidence::Matches,RangeEvidence::Unknown));
+    assert(!retainEnglishPrefix(true,true,RangeEvidence::Matches,RangeEvidence::Matches,RangeEvidence::Matches));
+    assert(!retainEnglishPrefix(false,false,RangeEvidence::Matches,RangeEvidence::Matches,RangeEvidence::Matches));
+    assert(!retainEnglishPrefix(true,false,RangeEvidence::Different,RangeEvidence::Matches,RangeEvidence::Matches));
+    assert(!retainEnglishPrefix(true,false,RangeEvidence::Matches,RangeEvidence::Different,RangeEvidence::Matches));
+    assert(!retainEnglishPrefix(true,false,RangeEvidence::Matches,RangeEvidence::Matches,RangeEvidence::Different));
     assert(translationOnCommit(false, true, false, false));
     assert(!translationOnCommit(false, false, true, false));
     assert(translationOnCommit(true, false, true, false));
@@ -121,6 +136,16 @@ int main() {
         std::wstring rebuilt;
         for (const auto &line : wrapped.english) rebuilt += longEnglish.substr(line.start, line.length);
         assert(rebuilt == longEnglish);
+    }
+    for(int dpi:{96,120,144,192,240}) {
+        auto measure=[dpi](const std::wstring &,size_t,size_t n,PanelFont){return int(n)*7*dpi/96;};
+        std::wstring advice=L"Basic correction: I want to go to the gym now and then meet my friends after a long workout.";
+        auto panel=layoutPanel(L"Chinese translation",{},0,dpi,800*dpi/96,600*dpi/96,measure,advice);
+        std::wstring shown;for(const auto &line:panel.proof)shown+=advice.substr(line.start,line.length);
+        assert(shown==advice && panel.contentHeight>panel.applyAdvice.top);
+        assert(panel.applyAdvice.left>=0 && panel.applyAdvice.right<panel.copyAdvice.left);
+        assert(panel.copyAdvice.right<=panel.width && panel.copyAdvice.bottom<=panel.contentHeight);
+        assert(panel.height<=600*dpi/96);
     }
     std::cout << "Sentence continuity, complete candidates, adaptive layout, expiry, Shift and placement checks passed\n";
 }
