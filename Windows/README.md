@@ -148,3 +148,6 @@ Four-beam decoding limits repeated token sequences. Local greeting handling avoi
 Reproduced lowercase-name paraphrase loops. Short uncomplicated English utterances stop at the first Chinese full stop; longer and compound inputs retain EOS decoding. This is a conservative workaround for the small offline model, not a general semantic correctness guarantee.
 升级后保存文档并重启 Windows，确保应用卸载旧输入法 DLL。仅打开新版设置并不会更新已运行的记事本或搜索进程。
 Save documents and restart Windows after upgrading: opening new settings does not unload older IME modules from existing applications.
+
+0.1.9：未上屏的分段拼音按退格，撤回最近选词，恢复其拼音并保留后续输入。
+Backspace restores the previous selected segment in active Pinyin composition while retaining remaining input. Committed text uses ordinary deletion.
