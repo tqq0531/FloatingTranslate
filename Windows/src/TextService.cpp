@@ -215,6 +215,7 @@ class TextService : public ITfTextInputProcessorEx,
     ShiftTap shift_;
     Sentence sentence_;
     std::string raw_;
+    std::vector<std::pair<std::string, std::wstring>> selectionUndo_;
     std::wstring locked_, english_, translatedSource_, requestedSource_, status_, correction_, advice_;
     std::vector<Candidate> candidates_;
     size_t selected_ = 0;
@@ -336,7 +337,7 @@ class TextService : public ITfTextInputProcessorEx,
         finishComposition();
         cancel();
         raw_.clear();
-        locked_.clear();
+        locked_.clear(); selectionUndo_.clear();
         candidates_.clear();
         selected_ = 0;
         sentence_.clear();
@@ -606,7 +607,7 @@ class TextService : public ITfTextInputProcessorEx,
             release(range);
         }
         raw_.clear();
-        locked_.clear();
+        locked_.clear(); selectionUndo_.clear();
         candidates_.clear();
     }
     std::optional<std::wstring> fragment() {
@@ -748,7 +749,7 @@ class TextService : public ITfTextInputProcessorEx,
         range->Release();
         sentence_.append(text, GetTickCount64());
         raw_.clear();
-        locked_.clear();
+        locked_.clear(); selectionUndo_.clear();
         candidates_.clear();
         selected_ = 0;
         translate();
@@ -817,6 +818,7 @@ class TextService : public ITfTextInputProcessorEx,
             return;
         auto chosen = candidates_[index];
         pinyin().remember(raw_, chosen);
+        selectionUndo_.push_back({raw_.substr(0, chosen.consumed), locked_});
         locked_ += chosen.text;
         raw_.erase(0, chosen.consumed);
         selected_ = 0;
@@ -951,6 +953,11 @@ class TextService : public ITfTextInputProcessorEx,
             return true;
         }
         if (code == VK_BACK) {
+            if (!selectionUndo_.empty()) {
+                auto previous = std::move(selectionUndo_.back()); selectionUndo_.pop_back();
+                raw_ = previous.first + raw_; locked_ = std::move(previous.second);
+                selected_ = 0; refresh(ec); return true;
+            }
             if (!raw_.empty())
                 raw_.pop_back();
             else if (!locked_.empty())
@@ -1420,7 +1427,7 @@ class TextService : public ITfTextInputProcessorEx,
                 else { release(sentenceRange_); if(!prefix)range->Clone(&sentenceRange_); }
                 if(sentenceRange_)sentenceRange_->SetGravity(ec,TF_GRAVITY_FORWARD,TF_GRAVITY_BACKWARD);
                 sentence_.append(text,GetTickCount64());
-                release(composition_);raw_.clear();locked_.clear();candidates_.clear();selected_=0;
+                release(composition_);raw_.clear();locked_.clear(); selectionUndo_.clear();candidates_.clear();selected_=0;
                 translate(); geometry(ec);
             } else { release(composition_); clear(); }
             release(range);
