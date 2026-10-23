@@ -67,11 +67,14 @@ final class TextClient: NSObject, IMKTextInput {
 @main struct ControllerSmoke {
     @MainActor static func main() async throws {
         _ = NSApplication.shared
+        let savedRemember = Preferences.shared.rememberCandidates
+        let savedChinese = Preferences.shared.chineseDefault
+        Preferences.shared.rememberCandidates = false
         let savedEnglish = Preferences.shared.directEnglish
         let savedDefault = Preferences.shared.englishDefault
         let savedPrivacy = Preferences.shared.privacyMode
         Preferences.shared.directEnglish = false; Preferences.shared.englishDefault = false; Preferences.shared.privacyMode = false
-        defer { Preferences.shared.directEnglish = savedEnglish; Preferences.shared.englishDefault = savedDefault; Preferences.shared.privacyMode = savedPrivacy }
+        defer { Preferences.shared.rememberCandidates = savedRemember; Preferences.shared.chineseDefault = savedChinese; Preferences.shared.directEnglish = savedEnglish; Preferences.shared.englishDefault = savedDefault; Preferences.shared.privacyMode = savedPrivacy }
         let client = TextClient()
         let controller = InputSession(client: client)
         func check(_ condition: Bool, _ message: String) { precondition(condition, message); print("PASS \(message)") }
@@ -130,7 +133,8 @@ final class TextClient: NSObject, IMKTextInput {
         controller.begin(client)
         Preferences.shared.directEnglish = true
         let calls = client.markedCalls
-        check(!key("a") && client.markedCalls == calls, "English mode passes characters directly without marked text")
+        check(key("a") && client.markedCalls > calls, "English mode composes a whole sentence for Chinese translation")
+        _ = key("", code: 53)
         Preferences.shared.directEnglish = false
         check(!key("", code: 53), "idle Escape reaches browser controls")
         controller.end(client)
@@ -145,6 +149,41 @@ final class TextClient: NSObject, IMKTextInput {
         controller.end(client)
         check(FloatingPanel.shared.model.pinyin == "n", "late deactivation of the old client cannot clear the new client")
         other.end(otherClient)
+        let englishClient = TextClient(); englishClient.bundleID = "com.example.Editor"
+        let englishSession = InputSession(client: englishClient)
+        func englishKey(_ text: String, code: UInt16 = 0) -> Bool {
+            let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: 0, context: nil, characters: text, charactersIgnoringModifiers: text, isARepeat: false, keyCode: code)!
+            return englishSession.process(event, client: englishClient)
+        }
+        for chineseDefault in [false, true] {
+            for alternative in [false, true] {
+                Preferences.shared.directEnglish = true
+                Preferences.shared.chineseDefault = chineseDefault
+                Preferences.shared.englishDefault = !chineseDefault
+                englishClient.text = ""; englishClient.caret = 0
+                englishSession.begin(englishClient)
+                for c in "Hello world." { check(englishKey(String(c), code: c == " " ? 49 : 0), "English sentence accepts characters and word spaces") }
+                check(FloatingPanel.shared.model.source == "Hello world." && englishClient.marked.location != NSNotFound, "word spaces keep English sentence composed")
+                for _ in 0..<40 {
+                    if !FloatingPanel.shared.model.english.isEmpty { break }
+                    try await Task.sleep(for: .milliseconds(100))
+                }
+                let target = FloatingPanel.shared.model.english
+                check(!target.isEmpty && target.contains(where: { !$0.isASCII }) && FloatingPanel.shared.model.toChinese, "English sentence receives actual Chinese translation and direction badge")
+                check(englishKey("", code: alternative ? 48 : 36), "Enter or Tab submits English mode")
+                check(englishClient.text == ((chineseDefault != alternative) ? target : "Hello world."), "independent English default and alternative output choose correct language")
+                check(englishClient.marked.location == NSNotFound, "English submit ends marked composition")
+                englishSession.end(englishClient)
+            }
+        }
+        Preferences.shared.directEnglish = false; Preferences.shared.englishDefault = false
+        englishClient.text = ""; englishClient.caret = 0; englishSession.begin(englishClient)
+        for c in "shi" { _ = englishKey(String(c)) }
+        let firstPage = FloatingPanel.shared.model.candidates
+        check(firstPage.count > 5, "Rime exposes candidates past first page")
+        check(englishKey("=") && FloatingPanel.shared.model.selected == 5, "equals moves to next five-item page")
+        check(englishKey("-") && FloatingPanel.shared.model.selected == 0, "minus returns to previous page")
+        englishSession.end(englishClient)
         let mixed = TextClient(); mixed.bundleID = "com.example.Editor"
         let mixedSession = InputSession(client: mixed); mixedSession.begin(mixed)
         func mixedKey(_ text: String, code: UInt16 = 0, modifiers: NSEvent.ModifierFlags = []) -> Bool {

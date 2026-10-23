@@ -1,10 +1,10 @@
 # 隐私、联网与密码输入
 
-适用版本：浮译 0.5.11 本地试用版。以下说明对应此仓库源码，不是对其他来源安装包、macOS 或所有目标应用的安全承诺。
+适用版本：浮译 0.5.13 本地试用版。以下说明对应此仓库源码，不是对其他来源安装包、macOS 或所有目标应用的安全承诺。
 
 ## 输入内容会发到哪里？
 
-浮译把本次输入的当前句子（包括已逐词确认的中文和正在编辑的完整中文候选）交给 macOS 的 Apple Translation 框架，在设备上生成英文。
+浮译把本次输入的当前句子（包括已逐词确认的中文和正在编辑的完整中文候选）交给 macOS 的 Apple Translation 框架，在设备上生成英文或中文。
 
 - 没有开发者服务器、第三方翻译 API、登录账户、广告或统计 SDK。
 - 应用源码没有 HTTP 客户端、socket、网页组件或云翻译降级路径。
@@ -21,11 +21,12 @@
 | 数据 | 保存位置 / 生命周期 |
 | --- | --- |
 | 内置拼音词库 | 应用 Resources，随应用分发 |
-| 中英文输入模式、默认输出语言、英文条位置、隐私模式、是否展示欢迎窗口 | macOS UserDefaults，布尔设置 |
+| 中英文输入模式、两个方向的默认输出语言、短词记忆开关、译文条位置、隐私模式、是否展示欢迎窗口 | macOS UserDefaults，布尔设置 |
 | 当前拼音、候选词、当前句子和译文 | 仅内存；逐词上屏后继续累计当前句子；取消、光标移动、切换应用 / 输入法、安全输入等操作清除。未完句停顿 60 秒、句末 8 秒后清除 |
 | Rime 运行配置 | 系统临时目录 `fuyi-rime-进程号/`，可含方案选择 / 版本等 `user.yaml` 元数据；不含输入历史。程序异常退出可能留下临时元数据 |
 | 设置窗口中的试用文本 | 仅当前窗口的内存状态；关闭窗口或开启隐私模式时清除 |
-| 译文历史、用户词库、用户词频 | 本版本不建立、不写入磁盘 |
+| 连续正文、译文历史、Rime 用户词库 | 不建立、不写入磁盘 |
+| 可选短词选词计数 | macOS 登录钥匙串，服务 `com.fuyi.inputmethod.CandidateCounts`；仅主动选定的最多四个汉字候选、拼音和次数，上限 2048 项；可能含人名或私人短语。可关闭应用/记录，或清除已保存项。关闭开关不会删除旧项；钥匙串锁定时清除会提示重试。钥匙串不可用时仅内存处理，不弹出认证提示，不以明文文件降级 |
 | Apple 语言包 | macOS 自行管理 |
 | 升级备份 | `~/Library/Application Support/FloatingTranslate/Backups/`，仅旧应用文件，不备份输入文本 |
 
@@ -66,3 +67,11 @@
 安装菜单修复会备份系统的已启用输入源清单（只有输入法标识与配置，不含输入文字），保存在 `~/Library/Application Support/FloatingTranslate/InstallBackups/`。仅补齐浮译自身缺失的两项登记。
 
 “启用并试用”是随应用附带的普通文本窗口，通过它自己的系统输入上下文选择浮译。它不监听全局键盘、不使用辅助功能读取其他软件，不联网，也不保存试用文字；关闭窗口会清空文字。安装检查优先使用新版 macOS 的 com.apple.inputsources / AppleEnabledThirdPartyInputSources，并保留旧版清单兼容检查。
+
+## 0.5.13 双向翻译与短词记忆 / Bidirectional translation and selection counts
+
+英文模式按整句进行英译中，空格不拆成独立请求。“英文转换后默认输出中文”与拼音默认输出英文设置独立。英文连续正文不会写入短词记录；数字、拉丁字母、长句和自动候选预览均不记录。Rime 自身学习仍关闭。
+
+Candidate counts are optional, local Keychain data containing only explicitly selected short Chinese phrases, their original Pinyin, and bounded counts. They may contain names or private phrases. Disabling stops applying/writing counts; clearing deletes the saved item when Keychain access succeeds. There is no plaintext fallback, automatic sync, or translation/prose history. This is input-related local data: do not describe this version as saving no input-related information at all.
+
+The two directions use Apple's installed-language translation sessions. Text stays on-device; initial language preparation contacts Apple. See [Apple TranslationSession documentation](https://developer.apple.com/documentation/Translation/TranslationSession).

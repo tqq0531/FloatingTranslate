@@ -42,6 +42,14 @@ import AppKit
         guard panel.renderedEnglish == shown && panel.translationText.selectedRange() == selected else { fatalError("Live updates interrupted selection") }
         panel.finishTextSelection(); panel.model.english = translated
         print("PASS mouse-selectable read-only English supports copying selection and full sentence without interrupting selection")
+        panel.model.toChinese = true
+        panel.model.english = "你今天锻炼了吗？"; panel.model.candidates = []
+        panel.show(near: anchor)
+        guard panel.copyEnglish(to: testPasteboard), testPasteboard.string(forType: .string) == "你今天锻炼了吗？" else { fatalError("Chinese translation copy failed") }
+        panel.translationText.setSelectedRange(NSRange(location: 0, length: 2))
+        guard panel.translationText.copyTranslation(to: testPasteboard, selectionOnly: true), testPasteboard.string(forType: .string) == "你今" else { fatalError("Chinese selected copy failed") }
+        panel.finishTextSelection(); panel.model.toChinese = false
+        print("PASS Chinese translation supports whole and selected copy")
         // Inspect the actual composited window, including the vibrancy backing.
         // cacheDisplay alone cannot catch rectangular behind-window material.
         guard let window = panel.translationText.window else { fatalError("No candidate window") }

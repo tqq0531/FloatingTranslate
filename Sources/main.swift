@@ -21,7 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         settings.target = self; menu.addItem(settings)
         let enable = NSMenuItem(title: "启用并试用浮译…", action: #selector(openInputSetup), keyEquivalent: "")
         enable.target = self; menu.addItem(enable)
-        for (title, tag) in [("中文拼音", 0), ("English 直接输入", 1)] {
+        for (title, tag) in [("中文拼音", 0), ("English 英译中", 1)] {
             let mode = NSMenuItem(title: title, action: #selector(selectInputMode(_:)), keyEquivalent: "")
             mode.target = self; mode.tag = tag; menu.addItem(mode)
         }
@@ -104,7 +104,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 // Establish IMK before creating NSApplication, as in the macOS Rime frontend.
 // Resolve the Swift controller class explicitly before IMK reads its plist name.
 func createInputServer() -> IMKServer? {
-    guard !CommandLine.arguments.contains("--install") else { return nil }
+    guard !CommandLine.arguments.contains("--install"), !CommandLine.arguments.contains("--snapshot") else { return nil }
     let controllerName = NSStringFromClass(FloatingInputController.self)
     precondition(Bundle.main.object(forInfoDictionaryKey: "InputMethodServerControllerClass") as? String == controllerName)
     guard let identifier = Bundle.main.bundleIdentifier,
@@ -119,7 +119,7 @@ func createInputServer() -> IMKServer? {
 }
 // Opening a downloaded/build copy must not create a second IMK connection.
 // Installer helpers run independently and never start an input server.
-if !CommandLine.arguments.contains("--install"),
+if !CommandLine.arguments.contains("--install"), !CommandLine.arguments.contains("--snapshot"),
    let identifier = Bundle.main.bundleIdentifier,
    let existing = NSRunningApplication.runningApplications(withBundleIdentifier: identifier).first(where: { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier && !$0.isTerminated }) {
     DistributedNotificationCenter.default().postNotificationName(Notification.Name(identifier + ".OpenSettings"), object: nil, userInfo: nil, deliverImmediately: true)

@@ -3,6 +3,7 @@ import SwiftUI
 
 @MainActor
 final class BubbleModel: ObservableObject {
+    @Published var toChinese = false
     @Published var source = ""
     @Published var english = ""
     @Published var status = ""
@@ -18,7 +19,7 @@ struct TranslationBubble: View {
 
     private var englishLine: some View {
         HStack(alignment: .top, spacing: 9) {
-            Text("EN").font(.system(size: 10, weight: .semibold, design: .rounded))
+            Text(model.toChinese ? "中" : "EN").font(.system(size: 10, weight: .semibold, design: .rounded))
                 .foregroundStyle(.white.opacity(0.5)).padding(.top, 4)
             Text(model.english.isEmpty ? model.status : model.english)
                 .font(.system(size: 17, weight: .medium))
@@ -117,7 +118,7 @@ final class TranslationSelectionView: NSTextView {
         let menu = NSMenu(); menu.autoenablesItems = false
         let selection = NSMenuItem(title: "复制选中英文", action: #selector(copy(_:)), keyEquivalent: "")
         selection.target = self; selection.isEnabled = selectedRange().length > 0; menu.addItem(selection)
-        let all = NSMenuItem(title: "复制整句英文", action: #selector(copyWholeTranslation(_:)), keyEquivalent: "")
+        let all = NSMenuItem(title: "复制整句译文", action: #selector(copyWholeTranslation(_:)), keyEquivalent: "")
         all.target = self; menu.addItem(all); return menu
     }
 }
@@ -146,6 +147,7 @@ final class FloatingPanel: NSObject, NSWindowDelegate {
         let choices: [PinyinCandidate]
         let selected: Int
         let above: Bool
+        let toChinese: Bool
     }
     var isVisible: Bool { panel.isVisible }
     var renderedEnglish: String { translationText.string }
@@ -178,10 +180,10 @@ final class FloatingPanel: NSObject, NSWindowDelegate {
         translationText.textContainer?.maximumNumberOfLines = 3
         translationText.textContainer?.lineBreakMode = .byTruncatingTail
         translationText.isVerticallyResizable = false; translationText.isHorizontallyResizable = false
-        copyButton.image = NSImage(systemSymbolName: "doc.on.doc", accessibilityDescription: "复制整句英文")
+        copyButton.image = NSImage(systemSymbolName: "doc.on.doc", accessibilityDescription: "复制整句译文")
         copyButton.target = self; copyButton.action = #selector(copyWhole(_:))
         copyButton.isBordered = false; copyButton.refusesFirstResponder = true
-        copyButton.toolTip = "复制整句英文"
+        copyButton.toolTip = "复制整句译文"
         badge.font = .systemFont(ofSize: 9, weight: .semibold); badge.textColor = .secondaryLabelColor
         separator.boxType = .separator
         for view in [translationText, badge, separator, copyButton] { background.addSubview(view) }
@@ -194,7 +196,7 @@ final class FloatingPanel: NSObject, NSWindowDelegate {
         lastCaret = caret; lastLevel = clientLevel
         let state = RenderState(text: model.english.isEmpty ? (model.status.isEmpty ? "输入完整拼音后显示英文" : model.status) : model.english,
                                 ready: !model.english.isEmpty, choices: model.candidates, selected: model.selected,
-                                above: Preferences.shared.translationAbove)
+                                above: Preferences.shared.translationAbove, toChinese: model.toChinese)
         if state != rendered { render(state, screenWidth: screen.visibleFrame.width) }
         panel.level = NSWindow.Level(rawValue: max(NSWindow.Level.popUpMenu.rawValue, Int(clientLevel) + 1))
         guard let origin = PanelPlacement.origin(anchor: caret, size: panel.frame.size, visibleFrame: screen.visibleFrame, preferAbove: false) else { conceal(); return }
@@ -203,6 +205,7 @@ final class FloatingPanel: NSObject, NSWindowDelegate {
     }
     private func render(_ state: RenderState, screenWidth: CGFloat) {
         rendered = state
+        badge.stringValue = state.toChinese ? "中" : "EN"
         let maxWidth = min(580, screenWidth - 16)
         let page = Array(state.choices.enumerated().dropFirst((state.selected / 5) * 5).prefix(5))
         let widths = page.map { min(165, max(44, ($0.element.text as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 19)]).width + 30)) }

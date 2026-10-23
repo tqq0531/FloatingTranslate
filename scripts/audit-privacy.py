@@ -17,7 +17,7 @@ checks = {
     "no disk-backed translation cache": not re.search(r"\bcache\s*[:=\[]|\.write\s*\(", sources["TranslationService.swift"]),
     "secure input is checked at translation boundary": sources["TranslationService.swift"].count("PrivacyProtection.requireAllowed()") == 2,
     "only installed-language session used for translation": "TranslationSession(installedSource:" in sources["TranslationService.swift"],
-    "persistent settings are an explicit small allowlist": set(re.findall(r'forKey: "([^"]+)"', combined)) <= {"englishDefault", "translationAbove", "privacyMode", "didShowWelcome", "directEnglish"},
+    "persistent settings are an explicit small allowlist": set(re.findall(r'forKey: "([^"]+)"', combined)) <= {"englishDefault", "translationAbove", "privacyMode", "didShowWelcome", "directEnglish", "chineseDefault", "rememberCandidates"},
     "no mouse-position fallback for text placement": "NSEvent.mouseLocation" not in combined,
 }
 for name, passed in checks.items():

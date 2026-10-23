@@ -51,15 +51,21 @@ static int remaining_letters(const char *text) {
 int FuyiRimeQuery(const char *raw, char **texts, int *consumed, int capacity) {
     if (!session || !raw || !*raw || capacity <= 0) return 0;
     input(raw);
-    RIME_STRUCT(RimeContext, context);
-    if (!api->get_context(session, &context)) return 0;
-    int total = context.menu.num_candidates < capacity ? context.menu.num_candidates : capacity;
-    for (int i = 0; i < total; ++i) texts[i] = strdup(context.menu.candidates[i].text);
-    api->free_context(&context);
+    int indices[100];
+    if (capacity > 100) capacity = 100;
+    int total = 0;
+    RimeCandidateListIterator iterator = {0};
+    if (api->candidate_list_begin(session, &iterator)) {
+        for (int i = 0; i < 200 && total < capacity && api->candidate_list_next(&iterator); ++i) {
+            texts[total] = strdup(iterator.candidate.text);
+            indices[total++] = i;
+        }
+        api->candidate_list_end(&iterator);
+    }
     int length = (int)strlen(raw);
     for (int i = 0; i < total; ++i) {
         input(raw);
-        if (!api->select_candidate(session, (size_t)i)) { consumed[i] = 0; continue; }
+        if (!api->select_candidate(session, (size_t)indices[i])) { consumed[i] = 0; continue; }
         RIME_STRUCT(RimeContext, selected);
         int tail = 0;
         if (api->get_context(session, &selected)) {

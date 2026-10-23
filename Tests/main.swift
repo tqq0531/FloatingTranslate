@@ -1,5 +1,8 @@
 import Foundation
 import CoreGraphics
+let savedMemory = UserDefaults.standard.object(forKey: "rememberCandidates")
+UserDefaults.standard.set(false, forKey: "rememberCandidates")
+defer { if let savedMemory { UserDefaults.standard.set(savedMemory, forKey: "rememberCandidates") } else { UserDefaults.standard.removeObject(forKey: "rememberCandidates") } }
 let engine = PinyinEngine(url: URL(fileURLWithPath: CommandLine.arguments[1]))
 func check(_ condition: Bool, _ message: String) {
     if !condition { fatalError(message) }
@@ -103,3 +106,16 @@ for file in runtimeFiles {
 sentence.append("测试", startingAt: 0, now: 100)
 sentence.noteActivity(now: 159)
 check(!sentence.expired(now: 170), "continued typing refreshes the sentence inactivity limit")
+
+let memory = CandidateMemory(persistent: false)
+let basic = [PinyinCandidate(text: "是", code: "shi", weight: 0), PinyinCandidate(text: "事", code: "shi", weight: 0)]
+memory.remember(raw: "shi", candidate: basic[1])
+check(memory.ranked(basic, raw: "shi").first?.text == "事", "explicit frequent short candidate is ranked first")
+check(memory.ranked(basic, raw: "sh").first?.text == "是", "memory stays specific to original Pinyin")
+let longPhrase = PinyinCandidate(text: "这是一个完整句子", code: "shi", weight: 0)
+check(memory.ranked([longPhrase] + basic, raw: "shi").first == longPhrase, "memory never hides complete sentence behind short word")
+memory.clear()
+check(memory.ranked(basic, raw: "shi") == basic, "clearing memory restores original order")
+memory.remember(raw: "shi", candidate: PinyinCandidate(text: "abc", code: "shi", weight: 0))
+check(memory.ranked(basic, raw: "shi") == basic, "English prose is never learned")
+check(engine.candidates("shi").count > 5, "candidate enumeration permits equals paging")

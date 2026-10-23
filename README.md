@@ -51,7 +51,7 @@ Engines and translation quality differ across platforms. Translations, candidate
 
 - 安卓 0.1.4 无 `INTERNET` 权限，模型随 APK 提供。Windows 随包模型在本机 CPU 推理，应用没有云翻译后备接口、遥测或自动更新。Mac 使用 Apple 本机翻译，首次语言包准备需要联网；系统自身的网络行为不受本项目控制。
 - Android 0.1.4 has no `INTERNET` permission. Windows performs bundled-model inference locally, with no cloud translation fallback, telemetry, or automatic updates. Mac uses Apple local translation and requires an initial language-model download. Operating-system networking is outside this project's control.
-- 不保存输入或译文历史。安卓的剪贴板历史为单独的可选功能，使用 Android Keystore / AES-GCM 本地加密，从复制时间起保留 24 小时；重复复制不延长期限。系统休眠或强行停止可能延迟物理删除，但到期内容不再显示或允许插入。
+- 不保存连续输入正文或译文历史。Mac 0.5.13 新增可关闭/清除的本机钥匙串短词选词计数，其中可能含私人短语。安卓的剪贴板历史为单独的可选功能，使用 Android Keystore / AES-GCM 本地加密，从复制时间起保留 24 小时；重复复制不延长期限。系统休眠或强行停止可能延迟物理删除，但到期内容不再显示或允许插入。
 - Input and translation history is not saved. Android clipboard history is a separate optional feature, encrypted locally with Android Keystore / AES-GCM and retained for 24 hours from copying. Duplicates do not extend expiry. Sleep or force-stop can delay physical deletion, but expired entries cannot be shown or inserted.
 - 检测到受保护输入框或启用手动隐私模式时停止处理，但无法保证识别所有自定义密码框。**输入密码、验证码和密钥时，请切换系统自带键盘；不要将这些内容保存到剪贴板历史。**
 - Protected fields and manual privacy mode disable processing, but custom password fields may not be identified reliably. **Use the system keyboard for passwords, verification codes, and secrets; do not retain them in clipboard history.**
@@ -71,3 +71,14 @@ Initial development builds require dependency downloads. Large Android and Windo
 第三方组件保持各自许可：Rime BSD、拼音词库 Apache 2.0、OPUS-MT 模型 CC BY 4.0、ONNX Runtime / Extensions MIT；其余声明见各平台文档和安装包。Microsoft 运行库受其独立条款约束。
 
 Third-party components retain their own licenses: Rime BSD, Pinyin dictionaries Apache 2.0, OPUS-MT CC BY 4.0, and ONNX Runtime / Extensions MIT. See platform documentation and packaged notices for details. Microsoft runtime components have separate terms.
+
+## Mac 0.5.13 开发版 / Mac development build
+
+- 轻按 Shift 切换拼音和 English 英译中。英文空格继续当前句子；回车提交默认语言、Tab 另一语言、Esc 保留英文原文。
+- 设置中新增独立的“英文转换后默认输出中文”，不影响“拼音转换后默认输出英文”。浮窗中文译文标记“中”，支持按钮复制和拖选复制。
+- 拼音候选按 `=` 下一页、`-` 上一页，每页五项，最多 100 项；主动常选的短词会优先。选词计数保存在本机钥匙串，可关闭或清除，不保存连续正文。
+- 保留“因为这是mac版本的”等混输整句翻译。Mac 使用 Apple 本机模型；首次语言包仍由系统准备，未把 Windows 模型替换到 Mac。
+
+Tap Shift for Pinyin or English-to-Chinese. English word spaces stay within the sentence; Enter commits the default, Tab the alternative and Esc the source. Independent output defaults are available for each direction. Use `=` / `-` for five-item candidate pages, up to 100 entries. Optional, clearable short-candidate counts use the local Keychain; prose and translations are not saved. Mixed-language sentence context remains intact. Apple language packs still need initial system preparation.
+
+See [usage and checks](docs/mac-0.5.13.md) and [privacy](docs/PRIVACY.md).

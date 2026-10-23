@@ -34,6 +34,7 @@ final class InputSession: NSObject {
     private var translation = ""
     private var translatedSource = ""
     private var requestedSource = ""
+    private var requestedChinese = false
     private var translationStatus = ""
     private var revision = 0
     private var work: Task<Void, Never>?
@@ -56,6 +57,9 @@ final class InputSession: NSObject {
         if raw.isEmpty { return !locked.isEmpty }
         guard choices.indices.contains(selection) else { return false }
         return Self.engine.isComplete(String(raw.dropFirst(choices[selection].code.count)))
+    }
+    private var targetsChinese: Bool {
+        Preferences.shared.directEnglish && !source.unicodeScalars.contains { (0x3400...0x9fff).contains($0.value) || (0x20000...0x3134f).contains($0.value) }
     }
     private var source: String { sentence.text + (completeFragment ? fragment : "") }
     private func location(_ range: NSRange) -> Int? { range.location == NSNotFound ? nil : range.location }
@@ -115,6 +119,9 @@ final class InputSession: NSObject {
         // Direct English stays a passthrough when idle. Within our own Chinese
         // sentence, insert literal characters ourselves so caret tracking cannot
         // race the host's later key handling. Never read surrounding document text.
+        if Preferences.shared.directEnglish && targetsChinese {
+            return processEnglish(event, client: client)
+        }
         if Preferences.shared.directEnglish || event.modifierFlags.contains(.capsLock) {
             if !inline.isEmpty { commitChinese(client) }
             if !sentence.isEmpty {
@@ -185,6 +192,11 @@ final class InputSession: NSObject {
             guard raw.count < 100, locked.count < 500 else { NSSound.beep(); return true }
             raw += characters; selection = 0; refresh(client); return true
         }
+        if !raw.isEmpty && !choices.isEmpty && (characters == "=" || characters == "-") {
+            let page = selection / 5
+            selection = characters == "=" ? min(((choices.count - 1) / 5) * 5, (page + 1) * 5) : max(0, (page - 1) * 5)
+            requestTranslation(); updatePosition(client); return true
+        }
         let punctuation = [",": "，", ".": "。", "?": "？", "!": "！", ";": "；", ":": "："]
         if let mark = punctuation[characters], !inline.isEmpty || !sentence.isEmpty {
             if Preferences.shared.englishDefault && !inline.isEmpty && completeFragment {
@@ -198,9 +210,40 @@ final class InputSession: NSObject {
         } else if !sentence.isEmpty { reset() }
         return false
     }
+    private func processEnglish(_ event: NSEvent, client: IMKTextInput) -> Bool {
+        switch event.keyCode {
+        case 36, 76, 48:
+            guard !inline.isEmpty else { finishSession(client); return false }
+            let handled = commit(client, english: event.keyCode == 48 ? !Preferences.shared.chineseDefault : Preferences.shared.chineseDefault)
+            if inline.isEmpty { reset() }
+            return handled
+        case 53:
+            guard !inline.isEmpty else { return false }
+            commitLiteral(client); return true
+        case 51:
+            guard !locked.isEmpty else { return false }
+            locked.removeLast()
+            if locked.isEmpty { sendMarkedText("", to: client); reset() } else { refresh(client) }
+            return true
+        default: break
+        }
+        guard ![123,124,125,126,115,119,116,121].contains(event.keyCode),
+              let text = event.characters, !text.isEmpty,
+              text.unicodeScalars.allSatisfy({ $0.value >= 32 && $0.value < 127 }) else {
+            finishSession(client); return false
+        }
+        if inline.isEmpty && sentence.isEmpty && text == " " { return false }
+        guard locked.count + text.count <= 1000 else { NSSound.beep(); return true }
+        if inline.isEmpty {
+            let range = selectedRange(client)
+            sentence.beginInput(at: location(range), selectionLength: range.length == NSNotFound ? 0 : range.length, now: now)
+        }
+        locked += text; refresh(client); return true
+    }
     private func choose(_ index: Int, client: IMKTextInput) {
         let items = choices
         guard items.indices.contains(index) else { return }
+        if !PrivacyProtection.isBlocking { Self.engine.remember(raw, candidate: items[index]) }
         locked += items[index].text; raw.removeFirst(items[index].code.count); selection = 0
         if raw.isEmpty && !Preferences.shared.englishDefault { commitChinese(client) }
         else { refresh(client) }
@@ -215,7 +258,7 @@ final class InputSession: NSObject {
         var range = replacement
         if !sentence.isEmpty {
             guard let tracked = sentence.replacementRange(markedRange: markedRange(client)) else {
-                translationStatus = "当前应用无法安全替换整句，请输入中文"
+                translationStatus = "当前应用无法安全替换整句，请复制译文"
                 FloatingPanel.shared.model.english = ""; FloatingPanel.shared.model.status = translationStatus; updatePosition(client); return true
             }
             range = tracked
@@ -281,23 +324,25 @@ final class InputSession: NSObject {
     private func requestTranslation() {
         let current = source
         let bubble = FloatingPanel.shared
+        let toChinese = targetsChinese
+        bubble.model.toChinese = toChinese
         bubble.model.source = current; bubble.model.pinyin = raw; bubble.model.candidates = choices; bubble.model.selected = selection
         // Selecting a word must not cancel an identical in-flight sentence translation.
-        if !current.isEmpty && current == requestedSource {
+        if !current.isEmpty && current == requestedSource && requestedChinese == toChinese {
             bubble.model.english = translation; bubble.model.status = translationStatus; return
         }
         revision += 1; let ticket = revision
-        work?.cancel(); work = nil; translation = ""; translatedSource = ""; requestedSource = current
+        work?.cancel(); work = nil; translation = ""; translatedSource = ""; requestedSource = current; requestedChinese = toChinese
         bubble.model.english = ""
         guard !current.isEmpty else {
-            translationStatus = Self.engine.available ? "补全拼音或选择中文后显示翻译" : "本地拼音引擎未就绪，请重新安装"
+            translationStatus = Self.engine.available ? "补全输入后显示翻译" : "本地拼音引擎未就绪，请重新安装"
             bubble.model.status = translationStatus; return
         }
         translationStatus = "正在翻译整句…"; bubble.model.status = translationStatus
         work = Task { [weak self] in
             do {
                 try await Task.sleep(for: .milliseconds(280))
-                let result = try await TranslationService.shared.english(for: current)
+                let result = try await TranslationService.shared.translate(current, toChinese: toChinese)
                 guard let self, self.isActive, !Task.isCancelled, self.revision == ticket else { return }
                 guard !PrivacyProtection.isBlocking else { self.reset(); return }
                 self.translation = result; self.translatedSource = current
@@ -360,7 +405,7 @@ final class InputSession: NSObject {
     }
     private func showModeToast(_ client: IMKTextInput) {
         let bubble = FloatingPanel.shared
-        bubble.model.status = Preferences.shared.directEnglish ? "英文输入 · Shift 切换中文" : "中文输入 · Shift 切换英文"
+        bubble.model.status = Preferences.shared.directEnglish ? "英译中 · Shift 切换中文" : "中文输入 · Shift 切换英文"
         positionGeneration &+= 1; let ticket = positionGeneration
         DispatchQueue.main.async { [weak self] in
             guard let self, self.isActive, self.positionGeneration == ticket, let client = self.activeClient else { return }
