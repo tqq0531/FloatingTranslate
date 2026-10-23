@@ -274,7 +274,17 @@ final class InputSession: NSObject {
     }
     private func sendMarkedText(_ text: String, to client: IMKTextInput) {
         clientUpdateDepth += 1; defer { clientUpdateDepth -= 1 }
-        client.setMarkedText(text, selectionRange: NSRange(location: text.utf16.count, length: 0), replacementRange: replacement)
+        // English remains composed for whole-sentence Enter/Tab replacement, but
+        // should look like ordinary typing. A plain String lets the host apply
+        // its default selected-raw-text background and composition underline.
+        let payload: Any = Preferences.shared.directEnglish && raw.isEmpty
+            ? NSAttributedString(string: text, attributes: [
+                .backgroundColor: NSColor.clear,
+                .underlineStyle: 0,
+                .underlineColor: NSColor.clear
+            ])
+            : text
+        client.setMarkedText(payload, selectionRange: NSRange(location: text.utf16.count, length: 0), replacementRange: replacement)
     }
     private func clearComposition() {
         raw = ""; locked = ""; selection = 0; Self.engine.clearActiveQuery()

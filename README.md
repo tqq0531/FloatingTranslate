@@ -86,3 +86,7 @@ See [usage and checks](docs/mac-0.5.13.md) and [privacy](docs/PRIVACY.md).
 Mac 0.5.14：中文模式输入 `make` 后轻按 Shift，提交原始英文 `make`，不接受当前“马克”等拼音候选；已确认的中文前缀和整句翻译上下文继续保留。此行为不受两个默认输出开关影响。
 
 Mac 0.5.14: tapping Shift after typing `make` in Pinyin commits the literal `make`, rather than the Chinese candidate preview. Confirmed prefixes and mixed-sentence translation context are retained, independent of the output defaults.
+
+Mac 0.5.15：英文输入使用透明背景和无下划线的组合文字，光标停在句末；保留实时整句翻译和回车 / Tab 输出选择。中文拼音仍保留常规组词提示。第三方编辑器可能自行覆盖组合文字样式。
+
+Mac 0.5.15: English composition uses a transparent background with no underline and leaves the caret at the end. Live sentence translation and Enter / Tab output selection remain available. Pinyin retains its standard composition appearance. Third-party editors may override composition styling.

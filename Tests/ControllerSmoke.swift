@@ -11,6 +11,8 @@ final class TextClient: NSObject, IMKTextInput {
     var marked = NSRange(location: NSNotFound, length: 0)
     var caret = 0
     var markedCalls = 0
+    var markedPayload: Any?
+    var markedSelection = NSRange(location: NSNotFound, length: 0)
     var inserts = 0
     var documentAccess = true
     var malformedQtRanges = false
@@ -36,6 +38,8 @@ final class TextClient: NSObject, IMKTextInput {
     }
     func setMarkedText(_ string: Any!, selectionRange: NSRange, replacementRange: NSRange) {
         markedCalls += 1
+        markedPayload = string
+        markedSelection = selectionRange
         let value = plain(string)
         let range = marked.location != NSNotFound ? marked : NSRange(location: caret, length: 0)
         replace(value, range: range)
@@ -134,12 +138,26 @@ final class TextClient: NSObject, IMKTextInput {
         Preferences.shared.directEnglish = true
         let calls = client.markedCalls
         check(key("a") && client.markedCalls > calls, "English mode composes a whole sentence for Chinese translation")
+        let englishMark = client.markedPayload as? NSAttributedString
+        check(englishMark?.attribute(.underlineStyle, at: 0, effectiveRange: nil) as? Int == 0,
+              "English composition explicitly disables the host underline")
+        check((englishMark?.attribute(.backgroundColor, at: 0, effectiveRange: nil) as? NSColor)?.alphaComponent == 0,
+              "English composition has a transparent background")
+        check(client.markedSelection == NSRange(location: 1, length: 0), "English typing leaves a caret instead of selecting the sentence")
+        let nativeEditor = NSTextView(frame: NSRect(x: 0, y: 0, width: 600, height: 100))
+        nativeEditor.setMarkedText(englishMark!, selectedRange: client.markedSelection, replacementRange: NSRange(location: NSNotFound, length: 0))
+        var nativeAttributes = nativeEditor.textStorage!.attributes(at: 0, effectiveRange: nil)
+        for (key, value) in nativeEditor.layoutManager!.temporaryAttributes(atCharacterIndex: 0, effectiveRange: nil) { nativeAttributes[key] = value }
+        check((nativeAttributes[.underlineStyle] as? Int ?? 0) == 0 && (nativeAttributes[.backgroundColor] as? NSColor)?.alphaComponent ?? 0 == 0,
+              "native AppKit editor has no background or underline on English composition")
+        check(nativeEditor.selectedRange().length == 0, "native AppKit editor does not select the English sentence")
         _ = key("", code: 53)
         Preferences.shared.directEnglish = false
         check(!key("", code: 53), "idle Escape reaches browser controls")
         controller.end(client)
         controller.begin(client)
         _ = key("n")
+        check(client.markedPayload is String, "Pinyin keeps the standard host composition appearance")
         let otherClient = TextClient()
         let other = InputSession(client: otherClient)
         other.begin(otherClient)
