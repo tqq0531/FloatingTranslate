@@ -95,16 +95,15 @@ final class InputSession: NSObject {
         if event.type == .flagsChanged {
             let toggle = shiftTap.modifierChanged(keyCode: Int(event.keyCode), shiftDown: event.modifierFlags.contains(.shift), otherModifiers: !event.modifierFlags.intersection([.command, .control, .option]).isEmpty, time: event.timestamp)
             if toggle {
-                commitLiteral(client); Preferences.shared.directEnglish.toggle(); showModeToast(client); return true
+                if !inline.isEmpty { commitChinese(client) }
+                Preferences.shared.directEnglish.toggle()
+                if sentence.isEmpty { showModeToast(client) } else { requestTranslation(); startTracking(); updatePosition(client) }
+                return true
             }
             return false
         }
         guard event.type == .keyDown else { return false }
         shiftTap.noteKeyDown()
-        if Preferences.shared.directEnglish || event.modifierFlags.contains(.capsLock) {
-            if !inline.isEmpty || !sentence.isEmpty { commitLiteral(client) }
-            return false
-        }
         if !event.modifierFlags.intersection([.command, .control, .option]).isEmpty {
             finishSession(client); return false
         }
@@ -113,6 +112,26 @@ final class InputSession: NSObject {
             if sentence.expired(now: now) || !sentence.isAtExpectedCaret(location(range), selectionLength: range.length == NSNotFound ? 0 : range.length) { reset() }
         }
         sentence.noteActivity(now: now)
+        // Direct English stays a passthrough when idle. Within our own Chinese
+        // sentence, insert literal characters ourselves so caret tracking cannot
+        // race the host's later key handling. Never read surrounding document text.
+        if Preferences.shared.directEnglish || event.modifierFlags.contains(.capsLock) {
+            if !inline.isEmpty { commitChinese(client) }
+            if !sentence.isEmpty {
+                if event.keyCode == 51 {
+                    sentence.deleteLast(now: now)
+                    if sentence.isEmpty { reset() } else { requestTranslation(); startTracking() }
+                    return false
+                }
+                if ![36, 48, 53, 76].contains(event.keyCode),
+                   let text = event.characters, !text.isEmpty,
+                   text.unicodeScalars.allSatisfy({ $0.value >= 32 && $0.value < 127 }) {
+                    appendLiteral(text, client: client); return true
+                }
+                finishSession(client)
+            }
+            return false
+        }
         switch event.keyCode {
         case 53:
             guard !inline.isEmpty || !sentence.isEmpty else { return false }
@@ -138,11 +157,11 @@ final class InputSession: NSObject {
             return commit(client, english: !Preferences.shared.englishDefault)
         case 49:
             guard !inline.isEmpty else {
-                if !sentence.isEmpty { sentence.append(" ", startingAt: nil, now: now); requestTranslation(); startTracking() }
+                if !sentence.isEmpty { appendLiteral(" ", client: client); return true }
                 return false
             }
             if raw.isEmpty { return commit(client, english: Preferences.shared.englishDefault) }
-            if choices.isEmpty { commitLiteral(client); return false }
+            if choices.isEmpty { commitChinese(client); return true }
             choose(selection, client: client); return true
         default: break
         }
@@ -175,7 +194,7 @@ final class InputSession: NSObject {
         }
         if !inline.isEmpty { commitChinese(client) }
         if !sentence.isEmpty && characters.unicodeScalars.allSatisfy({ $0.value >= 32 && $0.value < 127 }) {
-            sentence.append(characters, startingAt: nil, now: now); requestTranslation(); startTracking()
+            appendLiteral(characters, client: client); return true
         } else if !sentence.isEmpty { reset() }
         return false
     }
@@ -215,6 +234,13 @@ final class InputSession: NSObject {
     private func clearComposition() {
         raw = ""; locked = ""; selection = 0; Self.engine.clearActiveQuery()
         if Self.activeController === self || Self.activeController == nil { FloatingPanel.shared.onChoose = nil }
+    }
+    private func appendLiteral(_ text: String, client: IMKTextInput) {
+        sentence.append(text, startingAt: location(selectedRange(client)), now: now)
+        sendText(text, to: client, range: replacement)
+        needsFreshAnchor = true
+        modeToast?.cancel(); modeToast = nil
+        requestTranslation(); startTracking(); updatePosition(client)
     }
     private func commitChinese(_ client: IMKTextInput, suffix: String = "") {
         guard !PrivacyProtection.isBlocking else { reset(); return }
@@ -273,13 +299,13 @@ final class InputSession: NSObject {
                 try await Task.sleep(for: .milliseconds(280))
                 let result = try await TranslationService.shared.english(for: current)
                 guard let self, self.isActive, !Task.isCancelled, self.revision == ticket else { return }
-                guard !PrivacyProtection.isBlocking, !Preferences.shared.directEnglish else { self.reset(); return }
+                guard !PrivacyProtection.isBlocking else { self.reset(); return }
                 self.translation = result; self.translatedSource = current
                 bubble.model.english = result
                 if let current = self.activeClient { self.updatePosition(current) }
             } catch {
                 guard let self, self.isActive, !Task.isCancelled, self.revision == ticket else { return }
-                guard !PrivacyProtection.isBlocking, !Preferences.shared.directEnglish else { self.reset(); return }
+                guard !PrivacyProtection.isBlocking else { self.reset(); return }
                 self.translationStatus = "本机翻译未就绪，请在设置检查语言包"
                 bubble.model.status = self.translationStatus
                 if let current = self.activeClient { self.updatePosition(current) }
@@ -290,7 +316,6 @@ final class InputSession: NSObject {
         guard isActive else { reset(); return }
         guard !PrivacyProtection.isBlocking else { reset(); return }
         if FloatingPanel.shared.isSelectingTranslation { return }
-        if Preferences.shared.directEnglish { if let client = activeClient { commitLiteral(client) } else { reset() }; return }
         if sentence.expired(now: now) { reset(); return }
         if inline.isEmpty && !sentence.isEmpty, let client = activeClient {
             let range = selectedRange(client)
