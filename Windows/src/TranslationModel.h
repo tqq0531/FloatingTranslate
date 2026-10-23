@@ -5,6 +5,7 @@
 #include <functional>
 #include <limits>
 #include <cmath>
+#include <cctype>
 #include <string>
 #include <vector>
 #define ORT_API_MANUAL_INIT
@@ -131,6 +132,17 @@ class TranslationModel {
         const char *ei[] = {"input_ids", "attention_mask"};
         const char *eo[] = {"last_hidden_state"};
         auto hidden = encoder_.Run(Ort::RunOptions{nullptr}, ei, inputs.data(), 2, eo, 1);
+        // Very short, unpunctuated English utterances can make this subtitle-
+        // trained model invent a second sentence. End at its first full stop.
+        // Longer/compound input keeps normal EOS decoding.
+        size_t words = 0; bool inWord = false;
+        for (unsigned char c : source) { bool letter = std::isalnum(c) != 0; if(letter && !inWord)++words; inWord=letter; }
+        std::string lower = source;
+        std::transform(lower.begin(),lower.end(),lower.begin(),[](unsigned char c){return std::tolower(c);});
+        bool shortUtterance = targetLanguage_ >= 0 && words <= 8 &&
+            source.find_first_of(".,;:!?\n") == std::string::npos &&
+            lower.find(" and ")==std::string::npos && lower.find(" but ")==std::string::npos &&
+            lower.find(" because ")==std::string::npos;
         struct Beam { std::vector<int64_t> tokens; double score; bool done; };
         std::vector<Beam> beams{{{65000}, 0, false}};
         const char *di[] = {"input_ids", "encoder_attention_mask", "encoder_hidden_states"};
@@ -163,7 +175,8 @@ class TranslationModel {
                     Beam candidate=beam;
                     candidate.tokens.push_back(best);
                     candidate.score += adjusted[best]-normalizer;
-                    candidate.done=best==0;
+                    candidate.done=best==0 || (shortUtterance && output.size()>2 &&
+                        vocab_[best].find("。")!=std::string::npos);
                     next.push_back(std::move(candidate));
                     adjusted[best]=-std::numeric_limits<float>::infinity();
                 }
@@ -173,7 +186,7 @@ class TranslationModel {
             beams=std::move(next);
             if(beams.front().done) {
                 std::string text;
-                for(size_t i=1;i+1<beams.front().tokens.size();++i) {
+                for(size_t i=1;i<beams.front().tokens.size() && beams.front().tokens[i]!=0;++i) {
                     auto &piece=vocab_[beams.front().tokens[i]];
                     text += piece=="<unk>" ? "�" : piece;
                 }

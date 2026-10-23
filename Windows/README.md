@@ -142,3 +142,9 @@ python3 Windows/tools/build.py
 ## 0.1.7 翻译与候选窗修复 / Translation and candidate fixes
 使用四路候选解码和重复片段限制；独立英文问候语本地直译，句首问候语与后续正文分别处理。搜索框无法提供光标位置时，尝试使用短输入区域的位置显示候选。模型仍可能误译；Windows 搜索候选显示需要实机验收。
 Four-beam decoding limits repeated token sequences. Local greeting handling avoids ambiguous short translations. A compact TSF view extent serves as a fallback when caret geometry is unavailable. Model accuracy remains limited; Windows Search visibility needs native validation.
+
+## 0.1.8 小写英文短句 / Lowercase short utterances
+复现并修复 `hi my name is jack` / `my name is jack` 的近义重复：对最多八词、无内部标点和常见连接词的英文短句，在首个中文句号处结束解码。更长或复合句保留正常结束标记。此规则是小型离线模型的保守补救，不代表通用语义纠错；翻译仍可能不准确。
+Reproduced lowercase-name paraphrase loops. Short uncomplicated English utterances stop at the first Chinese full stop; longer and compound inputs retain EOS decoding. This is a conservative workaround for the small offline model, not a general semantic correctness guarantee.
+升级后保存文档并重启 Windows，确保应用卸载旧输入法 DLL。仅打开新版设置并不会更新已运行的记事本或搜索进程。
+Save documents and restart Windows after upgrading: opening new settings does not unload older IME modules from existing applications.
