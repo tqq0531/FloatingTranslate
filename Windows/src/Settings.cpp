@@ -130,6 +130,7 @@ static HWND control(const wchar_t *type, const wchar_t *text, DWORD style, int x
 static void save() {
     options.english = SendDlgItemMessageW(window, 101, BM_GETCHECK, 0, 0) == BST_CHECKED;
     options.above = SendDlgItemMessageW(window, 102, BM_GETCHECK, 0, 0) != BST_CHECKED;
+    options.chinese = SendDlgItemMessageW(window, 106, BM_GETCHECK, 0, 0) == BST_CHECKED;
     options.remember = SendDlgItemMessageW(window, 105, BM_GETCHECK, 0, 0) == BST_CHECKED;
     options.privacy = SendDlgItemMessageW(window, 103, BM_GETCHECK, 0, 0) == BST_CHECKED;
     try {
@@ -149,7 +150,10 @@ static void test() {
             verifyModels();
             Translator engine;
             auto text = engine.translate(L"你好，今天我去北京。", [] { return false; });
-            ok = !text.empty();
+            auto chinese = engine.translate(L"Have you worked out today?", [] { return false; }, true);
+            ok = !text.empty() && std::any_of(chinese.begin(), chinese.end(), [](wchar_t c) {
+                return c >= 0x3400 && c <= 0x9fff;
+            });
         } catch (...) {
         }
         PostMessageW(window, WM_APP + 1, ok, 0);
@@ -167,26 +171,28 @@ static LRESULT CALLBACK proc(HWND w, UINT message, WPARAM a, LPARAM b) {
                         CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
         auto title = control(L"STATIC", L"浮译 · Windows", 0, 32, 24, 500, 46, 0);
         SendMessageW(title, WM_SETFONT, (WPARAM)heading, TRUE);
-        control(L"STATIC", L"输入中文，英文随行。离线模型已在解压目录内。", 0, 34, 76, 540, 32, 0);
+        control(L"STATIC", L"中英双向翻译，离线模型已在解压目录内。", 0, 34, 76, 540, 32, 0);
         control(L"BUTTON", L"启用浮译", BS_PUSHBUTTON, 34, 123, 160, 44, 1);
         control(L"BUTTON", L"停用并注销", BS_PUSHBUTTON, 208, 123, 160, 44, 2);
         control(L"BUTTON", L"检查离线组件", BS_PUSHBUTTON, 382, 123, 180, 44, 3);
         control(L"STATIC", L"输入偏好", 0, 34, 199, 500, 26, 0);
-        control(L"BUTTON", L"拼音转换后默认输出英文", BS_AUTOCHECKBOX | WS_TABSTOP, 34, 235, 520, 30, 101);
-        control(L"BUTTON", L"翻译浮窗优先显示在光标下方", BS_AUTOCHECKBOX | WS_TABSTOP, 34, 274, 520, 30,
+        control(L"BUTTON", L"拼音转换后默认输出英文", BS_AUTOCHECKBOX | WS_TABSTOP, 34, 230, 520, 28, 101);
+        control(L"BUTTON", L"英文转换后默认输出中文", BS_AUTOCHECKBOX | WS_TABSTOP, 34, 264, 520, 28, 106);
+        control(L"BUTTON", L"翻译浮窗优先显示在光标下方", BS_AUTOCHECKBOX | WS_TABSTOP, 34, 298, 520, 28,
                 102);
-        control(L"BUTTON", L"隐私模式：直接输入，暂停拼音与翻译", BS_AUTOCHECKBOX | WS_TABSTOP, 34, 313, 530,
-                30, 103);
+        control(L"BUTTON", L"隐私模式：直接输入，暂停拼音与翻译", BS_AUTOCHECKBOX | WS_TABSTOP, 34, 332, 530,
+                28, 103);
         control(L"BUTTON", L"记住常选短词，优先显示（本机加密）", BS_AUTOCHECKBOX | WS_TABSTOP,
-                34, 348, 390, 28, 105);
-        control(L"BUTTON", L"清除选词记忆", BS_PUSHBUTTON | WS_TABSTOP, 430, 348, 132, 28, 6);
+                34, 366, 390, 28, 105);
+        control(L"BUTTON", L"清除选词记忆", BS_PUSHBUTTON | WS_TABSTOP, 430, 366, 132, 28, 6);
+        CheckDlgButton(w, 106, options.chinese ? BST_CHECKED : BST_UNCHECKED);
         CheckDlgButton(w, 105, options.remember ? BST_CHECKED : BST_UNCHECKED);
         CheckDlgButton(w, 101, options.english ? BST_CHECKED : BST_UNCHECKED);
         CheckDlgButton(w, 102, options.above ? BST_UNCHECKED : BST_CHECKED);
         CheckDlgButton(w, 103, options.privacy ? BST_CHECKED : BST_UNCHECKED);
-        control(L"STATIC", L"试一试：nihao；= 下一页，- 上一页，空格选词。", 0, 34, 395, 540, 26, 0);
-        auto editor = control(L"EDIT", L"", WS_BORDER | WS_TABSTOP | ES_MULTILINE | ES_AUTOVSCROLL, 34, 433,
-                              528, 76, 104);
+        control(L"STATIC", L"Shift 切换拼音/英文；回车默认语言，Tab 另一语言。", 0, 34, 410, 540, 26, 0);
+        auto editor = control(L"EDIT", L"", WS_BORDER | WS_TABSTOP | ES_MULTILINE | ES_AUTOVSCROLL, 34, 444,
+                              528, 70, 104);
         SendMessageW(editor, EM_SETLIMITTEXT, 1000, 0);
         control(L"STATIC", L"本机离线 · 短词记忆可关闭或清除", 0, 34, 540, 540, 28, 0);
         control(L"STATIC",
@@ -194,7 +200,7 @@ static LRESULT CALLBACK proc(HWND w, UINT message, WPARAM a, LPARAM b) {
                 0, 34, 575, 540, 48, 0);
         control(L"BUTTON", L"使用说明", BS_PUSHBUTTON, 34, 644, 160, 36, 4);
         control(L"BUTTON", L"隐私与开源许可", BS_PUSHBUTTON, 208, 644, 180, 36, 5);
-        status = control(L"STATIC", L"0.1.4 · Windows x64 开发试用版", 0, 34, 700, 540, 40, 0);
+        status = control(L"STATIC", L"0.1.5 · Windows x64 开发试用版", 0, 34, 700, 540, 40, 0);
         return 0;
     }
     case WM_CTLCOLORSTATIC:
@@ -211,7 +217,7 @@ static LRESULT CALLBACK proc(HWND w, UINT message, WPARAM a, LPARAM b) {
     }
     case WM_COMMAND: {
         int id = LOWORD(a);
-        if (((id >= 101 && id <= 103) || id == 105) && HIWORD(a) == BN_CLICKED) {
+        if (((id >= 101 && id <= 103) || id == 105 || id == 106) && HIWORD(a) == BN_CLICKED) {
             save();
             return 0;
         }
@@ -251,7 +257,7 @@ static LRESULT CALLBACK proc(HWND w, UINT message, WPARAM a, LPARAM b) {
     }
     case WM_APP + 1:
         busy = false;
-        SetWindowTextW(status, a ? L"内置模型校验和真实离线翻译通过，无需网络。"
+        SetWindowTextW(status, a ? L"中英双向模型校验和离线翻译通过，无需网络。"
                                  : L"检查未通过，请运行“检查离线组件.cmd”查看结果。");
         return 0;
     case WM_CLOSE:

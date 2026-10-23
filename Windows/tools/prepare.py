@@ -86,4 +86,5 @@ shutil.copytree(ROOT/'assets/licenses',licenses,dirs_exist_ok=True)
 for name,arg in [('启用浮译.cmd','--enable'),('停用浮译.cmd','--disable'),('浮译设置.cmd','')]:
  (OUT/name).write_bytes(('@echo off\r\n"%~dp0FuyiSettings.exe" '+arg+'\r\n').encode())
 (OUT/'检查离线组件.cmd').write_bytes(b'@echo off\r\n"%~dp0FuyiCoreTest.exe"\r\nif errorlevel 1 goto failed\r\n"%~dp0FuyiCheck.exe"\r\nif errorlevel 1 goto failed\r\necho PASSED\r\ngoto end\r\n:failed\r\necho FAILED\r\n:end\r\npause\r\n')
+subprocess.run([sys.executable,str(ROOT/'tools/prepare_reverse_translation.py')],check=True)
 print('Staged offline distribution:',OUT,flush=True)

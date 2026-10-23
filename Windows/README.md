@@ -1,7 +1,17 @@
-# 浮译 Windows · 0.1.4 开发试用版
+# 浮译 Windows · 0.1.5 开发试用版
 
-Windows 原生 TSF 输入法，中文拼音使用与 Mac 相同的 Rime 1.17.0 词库和方案，中文 → 英文使用完整内置的 OPUS-MT / ONNX 本地模型。
+Windows 原生 TSF 输入法，中文拼音使用与 Mac 相同的 Rime 1.17.0 词库和方案，中英双向翻译使用完整内置的 OPUS-MT / ONNX 本地模型。
 
+
+## 0.1.5 英译中 / Offline English-to-Chinese
+
+- 轻按 Shift 切换中文拼音和英文翻译模式。英文模式输入 `Have you worked out today?`，浮窗显示中文；空格用于分词，保留整句上下文。
+- “拼音转换后默认输出英文”和新增“英文转换后默认输出中文”独立保存，默认均关闭。英文模式按回车提交默认语言，Tab 提交另一种语言；译文未就绪时保留组合等待。Esc 保留英文原文。
+- 中文模式保持原选词流程；复制按钮和拖选复制同时支持两种方向的译文。中文译文标记“中”，英文译文标记“EN”。
+- 两套完整离线模型随 ZIP 提供，不联网下载。英文连续正文仅保留于当前输入会话内存，不写入选词记忆。
+- 开启原始隐私输入时暂停两种方向的处理。首次启用会校验两套模型，并运行中译英和英译中自检。
+
+Tap Shift to switch between Pinyin and English translation. Spaces remain within the English sentence. Two independent preferences control Pinyin-to-English and English-to-Chinese default output. In English mode, Enter commits the default language and Tab commits the alternative; Esc keeps the English source. Both models are bundled, with no runtime download or cloud fallback. English prose is not added to candidate memory. Windows host interaction remains pending user testing.
 
 ## 0.1.4 选词记忆、翻页与复制 / Ranking, paging and copy
 
@@ -18,7 +28,7 @@ While composing, `=` / `-` move between five-item pages, with up to 100 candidat
 - 英文 16 → 14 DIP，中文候选 21 → 17 DIP，编号 10 → 9 DIP；单行译文卡从 44 → 34 DIP，常规双行浮窗从 94 → 74 DIP（约矮 21%）。窗口仍按系统 DPI 缩放。
 - 收紧左右内边距与候选间距，最大宽度从 560 → 440 DIP。长译文、长候选继续完整换行，超屏幕高度继续滚动查看。
 - 冷灰色轻微渐变、细描边、低对比分隔线、柔和蓝色选中态；复制图标缩小并加上鼠标悬停反馈。圆角外继续透明。
-- 保留 0.1.2 的系统搜索兼容处理、默认下方显示和隐私规则。当前包的系统副本路径为 `%ProgramFiles%\FloatingTranslate\0.1.4`。
+- 保留 0.1.2 的系统搜索兼容处理、默认下方显示和隐私规则。当前包的系统副本路径为 `%ProgramFiles%\FloatingTranslate\0.1.5`。
 
 The English/candidate/number type sizes are reduced to 14/17/9 DIP. A typical two-row panel is 74 DIP tall instead of 94; a translation-only card is 34 instead of 44. Tighter spacing, a cooler subtle gradient, fine borders, quieter dividers, blue selection and a smaller copy icon refine the presentation. Text still wraps completely and follows system DPI. The 0.1.2 compatibility and privacy changes remain included. Visual results on Windows await user testing.
 
@@ -61,7 +71,7 @@ The presentation follows the Mac version. Native rendering and translation engin
 
 ## 与 Mac 一致的主要操作
 
-- 轻按 Shift 切换中文拼音 / English 直接输入。Shift + 字母和 Ctrl / Alt / Win 快捷键放行。
+- 轻按 Shift 切换中文拼音 / English 翻译模式；英文模式保留大小写与标点，Ctrl / Alt / Win 快捷键放行。
 - 中文模式支持全拼、简拼（`nihao` / `nh`）、常见错拼（`zhogn` / `nihoa`）和音节分隔（`xi'an`），通过 Rime 原方案处理，不使用简化的临时字表，关闭 Rime 自动学习；0.1.4 的主动选词计数由独立加密模块处理。
 - 空格、1–5 或鼠标点击选词；方向键移动候选，PageUp / PageDown 每次移动 5 项。
 - 分段输入“我 / 今天 / 去北京”，翻译累计当前整句，不只翻译最后一段。不扫描文档前文。
@@ -77,11 +87,11 @@ The presentation follows the Mac version. Native rendering and translation engin
 
 不读取系统剪贴板，不收集复制历史，不保存连续输入正文或译文历史。开启选词记忆时会保存上述短候选及拼音、次数，不能把它描述为完全不保存输入相关数据。只有明确点击复制、拖选后 Ctrl+C 或右键复制时才写入系统剪贴板，系统自己的剪贴板历史和云同步由 Windows 设置决定。Android 的 24 小时剪贴板历史不属于本 Windows 首版功能，因为本次以 Mac 功能为目标。
 
-启用前从旧 `%LOCALAPPDATA%\FloatingTranslate\settings.ini` 迁移设置；启用后设置保存到 `%PROGRAMDATA%\FloatingTranslate\Preferences\当前用户SID\settings.ini`，只含默认语言、位置、隐私、直接英文、选词记忆等开关，短词记录不会写入这个共享目录。该专用设置目录向 AppContainer 提供只读权限，不存放输入内容。普通宿主的 Rime 固定词库缓存在系统临时目录中的 `FuyiRime-进程号`，沙箱宿主则在自身 `TempState` 中创建同名缓存；用户词典和学习关闭。活动拼音、中文句子和译文只在内存中保留；不生成含真实输入的调试日志。
+启用前从旧 `%LOCALAPPDATA%\FloatingTranslate\settings.ini` 迁移设置；启用后设置保存到 `%PROGRAMDATA%\FloatingTranslate\Preferences\当前用户SID\settings.ini`，只含默认语言、位置、隐私、英文输入模式、选词记忆等开关，短词记录不会写入这个共享目录。该专用设置目录向 AppContainer 提供只读权限，不存放输入内容。普通宿主的 Rime 固定词库缓存在系统临时目录中的 `FuyiRime-进程号`，沙箱宿主则在自身 `TempState` 中创建同名缓存；用户词典和学习关闭。活动拼音、中文句子和译文只在内存中保留；不生成含真实输入的调试日志。
 
 TSF 安全激活、输入框标记 Password/Private/NumericPassword/NumericPIN、标准 Win32 密码样式和手动隐私模式会停止处理。自定义或错误标记的密码框无法可靠识别，**输入密码、验证码和密钥前请手动切换系统键盘**。测试工具只用固定示例句，不读取用户文档。
 
-当前仅中译英。OPUS-MT 的翻译质量与 Mac 的 Apple Translation 不同，口语、专名和复杂语境可能不准，不承诺相同译文。输入最多 256 个模型子词、输出最多 128 个子词，超长提示分句，不静默截断。
+当前支持中英双向翻译。OPUS-MT 的翻译质量与 Mac 的 Apple Translation 不同，口语、专名和复杂语境可能不准，不承诺相同译文。输入最多 256 个模型子词、输出最多 128 个子词，超长提示分句，不静默截断。
 
 ## 停用、更新与删除
 
@@ -102,9 +112,9 @@ python3 Windows/tools/prepare.py
 python3 Windows/tools/build.py
 ```
 
-在 Windows 上运行“检查离线组件.cmd”可检查模型完整性、Rime 全拼/简拼/错拼和真实中译英，无需先注册输入法。`FuyiCoreTest.exe` 检查分句、过期、Shift 及多屏位置。测试结果与未完成的兼容验收请见仓库 `Windows/TESTING.md`。仅编译成功不能证明 Chrome、Word、Qt 编辑器等宿主的真实 TSF 兼容性。
+在 Windows 上运行“检查离线组件.cmd”可检查模型完整性、Rime 全拼/简拼/错拼和真实中英双向翻译，无需先注册输入法。`FuyiCoreTest.exe` 检查分句、过期、Shift 及多屏位置。测试结果与未完成的兼容验收请见仓库 `Windows/TESTING.md`。仅编译成功不能证明 Chrome、Word、Qt 编辑器等宿主的真实 TSF 兼容性。
 
-模型来自 Helsinki-NLP/opus-mt-zh-en / Xenova 固定转换，遵循 CC BY 4.0；Rime BSD、词库 Apache 2.0、ONNX Runtime 及 Extensions MIT、LLVM-MinGW 及静态运行库保留各自许可。归属、改动说明、许可证和上游第三方声明均在 `licenses/`。Microsoft Visual C++ 官方安装程序带有独立条款，不被本仓库许可证覆盖。
+中译英模型来自 Helsinki-NLP/opus-mt-zh-en / Xenova 固定转换，遵循 CC BY 4.0；新增英译中模型来自 Helsinki-NLP/opus-mt-en-zh / Xenova 固定转换，遵循 Apache 2.0；Rime BSD、词库 Apache 2.0、ONNX Runtime 及 Extensions MIT、LLVM-MinGW 及静态运行库保留各自许可。归属、改动说明、许可证和上游第三方声明均在 `licenses/`。Microsoft Visual C++ 官方安装程序带有独立条款，不被本仓库许可证覆盖。
 
 参考：Microsoft TSF / ITfKeyEventSink / ITfContextView 文档，Rime 官方 Windows 实现 Weasel，以及仓库 Mac 版输入会话实现。
 

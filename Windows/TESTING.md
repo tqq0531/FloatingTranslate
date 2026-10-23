@@ -1,7 +1,25 @@
-# Windows 0.1.4 测试边界与验收清单
+# Windows 0.1.5 测试边界与验收清单
 
-日期：2026-10-22。当前开发主机为 macOS / Apple Silicon，交叉编译 Windows x64。**尚未在真实 Windows 系统完成输入服务与宿主应用验收。** 此包供指定测试人员试用，不应按“与 Mac 一样成熟稳定”对外宣传。
+日期：2026-10-23。当前开发主机为 macOS / Apple Silicon，交叉编译 Windows x64。**尚未在真实 Windows 系统完成输入服务与宿主应用验收。** 此包供指定测试人员试用，不应按“与 Mac 一样成熟稳定”对外宣传。
 
+
+## 0.1.5 双向翻译验收 / Bidirectional translation
+
+2026-10-23：核心回归、共享 C++ 双向实际推理（含取消/超长拒绝）、x64 四个二进制交叉编译、ZIP CRC/64 个文件 SHA-256/10 个模型文件/PE 导出与依赖审计均通过。Windows 输入与剪贴板实机行为仍未验收。
+
+On 2026-10-23, core regressions, actual shared C++ inference in both directions with cancellation/length checks, four x64 cross-compiled binaries, ZIP CRC, 64 file hashes, 10 model files and PE/dependency audits passed. Actual Windows typing and clipboard behavior remain pending.
+
+共享 C++ 推理代码使用固定英译中模型与简体目标前缀，在 Mac 开发机实际得到 `Have you worked out today?` → `你今天有锻炼吗?`。这不是 Windows 宿主验收。模型翻译仍可能不准确或重复词句。
+
+Windows 待用户检查：
+
+1. 两个默认输出开关四种组合分别保存、重开设置，确认独立生效。
+2. Shift 进入英文，逐词输入整句，空格不提交；大小写、Caps Lock、数字和英文标点保留；回车默认语言、Tab 另一语言，Esc 保留原文。
+3. 正在翻译时确认不能提交旧译文；切换模式或输入框不显示上次方向的结果。中文模式原有分段输入、选词记忆、翻页继续工作。
+4. 点击复制中文、拖选后 Ctrl+C，粘贴检查内容；隐私模式和正确标记密码框不翻译、不记忆。
+5. 断网启用与运行；模型缺失或损坏应自检失败，不能悄悄联网下载。
+
+Both direction defaults are independent. Test sentence spaces, capitalization, punctuation, Enter/Tab/Esc, stale-result rejection, source switching, Chinese copy, privacy/password bypass, and offline activation. Shared inference, core tests and static package checks do not replace actual Windows typing tests.
 
 ## 0.1.4 回归与待测 / Ranking and copy verification
 

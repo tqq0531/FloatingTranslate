@@ -7,7 +7,7 @@
 namespace fuyi {
 class Panel {
     HWND window_ = nullptr, tooltip_ = nullptr;
-    std::wstring pendingCopy_, copyTip_ = L"复制英文";
+    std::wstring pendingCopy_, copyTip_ = L"复制译文";
     int copyState_ = 0, copyAttempts_ = 0;
     DWORD copyError_ = ERROR_SUCCESS;
     static constexpr UINT_PTR copyRetryTimer = 2, copyFeedbackTimer = 3;
@@ -28,16 +28,16 @@ class Panel {
         copyError_ = clipboard(window_, pendingCopy_);
         if (copyError_ == ERROR_SUCCESS) {
             KillTimer(window_, copyRetryTimer); pendingCopy_.clear();
-            copyFeedback(1, L"已复制英文，可粘贴到目标输入框");
+            copyFeedback(1, L"已复制译文，可粘贴到目标输入框");
             SetTimer(window_, copyFeedbackTimer, 1600, nullptr);
         } else if (++copyAttempts_ >= 12 || copyError_ == ERROR_NO_DATA) {
             KillTimer(window_, copyRetryTimer); pendingCopy_.clear();
-            copyFeedback(2, copyError_ == ERROR_NO_DATA ? L"英文翻译尚未就绪" :
+            copyFeedback(2, copyError_ == ERROR_NO_DATA ? L"译文翻译尚未就绪" :
                 copyError_ == ERROR_ACCESS_DENIED ? L"系统暂不允许访问剪贴板，请重试或检查云电脑剪贴板设置" :
                                                   L"剪贴板暂时被占用，点击重新复制");
             SetTimer(window_, copyFeedbackTimer, 2400, nullptr);
         } else {
-            copyFeedback(3, L"正在重试复制英文…");
+            copyFeedback(3, L"正在重试复制译文…");
             SetTimer(window_, copyRetryTimer, 80, nullptr);
         }
     }
@@ -47,7 +47,7 @@ class Panel {
     std::wstring english_, status_, raw_;
     std::vector<Candidate> candidates_;
     size_t selected_ = 0, selA_ = 0, selB_ = 0;
-    bool dragging_ = false, copyHover_ = false;
+    bool dragging_ = false, copyHover_ = false, toChinese_ = false;
     std::vector<TextLine> lines_;
     RECT copy_{};
     int d(int value) const {
@@ -162,7 +162,7 @@ class Panel {
         SelectClipRgn(back, clip); DeleteObject(clip);
         SetBkMode(back, TRANSPARENT);
         SelectObject(back, small_); SetTextColor(back, RGB(133, 140, 150));
-        TextOutW(back, d(11), d(12) - scroll_, L"EN", 2);
+        TextOutW(back, d(11), d(12) - scroll_, toChinese_ ? L"中" : L"EN", toChinese_ ? 1 : 2);
         SelectObject(back, font_);
         const auto &text = english_.empty() ? status_ : english_;
         size_t lo = std::min(selA_, selB_), hi = std::max(selA_, selB_);
@@ -241,7 +241,7 @@ class Panel {
         switch (m) {
         case WM_TIMER:
             if (a == copyRetryTimer && !pendingCopy_.empty()) attemptCopy();
-            if (a == copyFeedbackTimer) { KillTimer(window_, copyFeedbackTimer); copyFeedback(0, L"复制英文"); }
+            if (a == copyFeedbackTimer) { KillTimer(window_, copyFeedbackTimer); copyFeedback(0, L"复制译文"); }
             return 0;
         case WM_MOUSEACTIVATE:
             return MA_NOACTIVATE;
@@ -310,7 +310,7 @@ class Panel {
             return 0;
         case WM_RBUTTONUP: {
             HMENU menu = CreatePopupMenu();
-            AppendMenuW(menu, MF_STRING, 1, selectedText().empty() ? L"复制整句英文" : L"复制选中英文");
+            AppendMenuW(menu, MF_STRING, 1, selectedText().empty() ? L"复制整句译文" : L"复制选中译文");
             AppendMenuW(menu, MF_STRING, 2, L"浮译设置");
             POINT screen = point;
             ClientToScreen(window_, &screen);
@@ -394,15 +394,16 @@ class Panel {
         attemptCopy();
     }
     void show(RECT anchor, const std::wstring &english, const std::wstring &status, const std::wstring &raw,
-              const std::vector<Candidate> &choices, size_t selected, bool above) {
+              const std::vector<Candidate> &choices, size_t selected, bool above, bool toChinese = false) {
         if (!window_)
             return;
         if (english_ != english) {
             KillTimer(window_, copyRetryTimer); KillTimer(window_, copyFeedbackTimer);
-            pendingCopy_.clear(); copyFeedback(0, L"复制英文");
+            pendingCopy_.clear(); copyFeedback(0, L"复制译文");
             selA_ = selB_ = 0;
             scroll_ = 0;
         }
+        toChinese_ = toChinese;
         bool selectionChanged = selected_ != selected;
         english_ = english;
         status_ = status;

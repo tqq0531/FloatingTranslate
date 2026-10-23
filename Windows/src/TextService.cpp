@@ -124,10 +124,11 @@ class LanguageButton : public ITfLangBarItemButton, public ITfSource {
     }
     HRESULT STDMETHODCALLTYPE InitMenu(ITfMenu *menu) override {
         auto o = read();
-        menu->AddMenuItem(1, o.direct ? TF_LBMENUF_CHECKED : 0, nullptr, nullptr, L"English 直接输入", 12,
+        menu->AddMenuItem(1, o.direct ? TF_LBMENUF_CHECKED : 0, nullptr, nullptr, L"English 英译中", 11,
                           nullptr);
         menu->AddMenuItem(2, o.english ? TF_LBMENUF_CHECKED : 0, nullptr, nullptr, L"拼音默认输出英文", 8,
                           nullptr);
+        menu->AddMenuItem(5, o.chinese ? TF_LBMENUF_CHECKED : 0, nullptr, nullptr, L"英文默认输出中文", 8, nullptr);
         menu->AddMenuItem(3, o.privacy ? TF_LBMENUF_CHECKED : 0, nullptr, nullptr, L"隐私模式", 4, nullptr);
         menu->AddMenuItem(4, 0, nullptr, nullptr, L"浮译设置", 4, nullptr);
         return S_OK;
@@ -200,7 +201,7 @@ class TextService : public ITfTextInputProcessorEx,
     Options options_, diskAtOverride_;
     std::optional<Options> unsavedOptions_;
     static bool sameOptions(const Options &a, const Options &b) {
-        return a.english == b.english && a.above == b.above && a.privacy == b.privacy && a.direct == b.direct && a.remember == b.remember;
+        return a.english == b.english && a.above == b.above && a.privacy == b.privacy && a.direct == b.direct && a.remember == b.remember && a.chinese == b.chinese;
     }
     void storeOptions() {
         try { options_.save(); unsavedOptions_.reset(); }
@@ -234,7 +235,7 @@ class TextService : public ITfTextInputProcessorEx,
                 std::unique_ptr<TranslationResult> r((TranslationResult *)b);
                 if (self->active_ && r->token == self->target_->token && r->ticket == self->revision_ &&
                     r->source == self->requestedSource_ && !self->secure_ && !self->options_.privacy &&
-                    !self->options_.direct) {
+                    r->toChinese == self->options_.direct) {
                     self->english_ = r->text;
                     self->translatedSource_ = r->source;
                     self->status_ = r->status;
@@ -261,7 +262,7 @@ class TextService : public ITfTextInputProcessorEx,
             } else unsavedOptions_.reset();
         }
         bool changed = updated.privacy != options_.privacy || updated.direct != options_.direct ||
-                       updated.english != options_.english;
+                       updated.english != options_.english || updated.chinese != options_.chinese;
         options_.above = updated.above;
         options_.remember = updated.remember;
         if (changed) {
@@ -629,11 +630,11 @@ class TextService : public ITfTextInputProcessorEx,
         cancel();
         requestedSource_ = value;
         if (value.empty()) {
-            status_ = L"补全拼音或选择中文后显示翻译";
+            status_ = options_.direct ? L"输入英文后显示中文翻译" : L"补全拼音或选择中文后显示翻译";
             return;
         }
         status_ = L"正在翻译整句…";
-        worker().submit(target_, revision_, value);
+        worker().submit(target_, revision_, value, options_.direct);
     }
     void geometry(TfEditCookie ec) {
         ITfContextView *view = nullptr;
@@ -674,14 +675,14 @@ class TextService : public ITfTextInputProcessorEx,
         draw();
     }
     void draw() {
-        if (!panel_ || !active_ || secure_ || options_.privacy || options_.direct ||
+        if (!panel_ || !active_ || secure_ || options_.privacy ||
             (!composing() && sentence_.text.empty()) || !haveAnchor_) {
             if (panel_)
                 panel_->hide();
             return;
         }
         panel_->show(anchor_, english_, status_, locked_ + wide(raw_), candidates_, selected_,
-                     options_.above);
+                     options_.above, options_.direct);
     }
     HRESULT refresh(TfEditCookie ec) {
         candidates_ = pinyin().query(raw_);
@@ -741,7 +742,7 @@ class TextService : public ITfTextInputProcessorEx,
         auto part = fragment();
         auto full = source();
         if (!part || full != translatedSource_ || english_.empty()) {
-            status_ = part ? L"整句译文尚未就绪，请稍候" : L"请先补全拼音或选词";
+            status_ = part ? L"整句译文尚未就绪，请稍候" : L"请先完成输入";
             draw();
             return;
         }
@@ -801,6 +802,51 @@ class TextService : public ITfTextInputProcessorEx,
         else
             refresh(ec);
     }
+    static bool printableEnglishKey(WPARAM key) {
+        return (key >= 'A' && key <= 'Z') || (key >= '0' && key <= '9') || key == VK_SPACE ||
+               (key >= VK_OEM_1 && key <= VK_OEM_3) || (key >= VK_OEM_4 && key <= VK_OEM_8) ||
+               (key >= VK_NUMPAD0 && key <= VK_DIVIDE);
+    }
+    bool englishKey(TfEditCookie ec, WPARAM code) {
+        if (code == VK_ESCAPE) {
+            if (!composing()) return false;
+            literal(ec); clear(); return true; // Cancel translation, keep typed English.
+        }
+        if (code == VK_RETURN || code == VK_TAB) {
+            if (!composing()) { clear(); return false; }
+            bool translated = translationOnCommit(true, options_.english, options_.chinese, code == VK_TAB);
+            commit(ec, translated);
+            if (!composing()) clear();
+            return true;
+        }
+        if (code == VK_BACK) {
+            if (locked_.empty()) return false;
+            eraseLast(locked_);
+            if (locked_.empty()) {
+                auto range = commitText(ec, L""); release(range); clear();
+            } else { marked(ec); translate(); geometry(ec); }
+            return true;
+        }
+        if (!printableEnglishKey(code)) {
+            if (code == VK_CAPITAL) return false;
+            literal(ec); clear(); return false;
+        }
+        BYTE state[256]{}; wchar_t text[8]{};
+        auto keyboard = GetKeyboardLayout(0);
+        if (!GetKeyboardState(state)) { literal(ec); clear(); return false; }
+        int count = ToUnicodeEx((UINT)code, MapVirtualKeyExW((UINT)code, MAPVK_VK_TO_VSC, keyboard),
+                                state, text, 8, 4, keyboard);
+        if (count <= 0 || count > 8 || text[0] < L' ') {
+            literal(ec); clear(); return false;
+        }
+        if (locked_.size() + count > 1000) { literal(ec); clear(); return false; }
+        // Spaces belong to the same English sentence, never translate each word separately.
+        locked_.append(text, count);
+        candidates_.clear(); selected_ = 0;
+        sentence_.touched = GetTickCount64();
+        marked(ec); translate(); geometry(ec);
+        return true;
+    }
     bool shortcut(WPARAM key) const {
         return (GetKeyState(VK_CONTROL) & 0x8000) || (GetKeyState(VK_MENU) & 0x8000) ||
                (GetKeyState(VK_LWIN) & 0x8000) || (GetKeyState(VK_RWIN) & 0x8000);
@@ -813,7 +859,9 @@ class TextService : public ITfTextInputProcessorEx,
         if (shortcut(key))
             return composing() || !sentence_.text.empty() ||
                    (key == 'C' && panel_ && !panel_->selectedText().empty());
-        if (options_.direct || (GetKeyState(VK_CAPITAL) & 1))
+        if (options_.direct)
+            return composing() || shift_.armed || (key != VK_SPACE && printableEnglishKey(key));
+        if (GetKeyState(VK_CAPITAL) & 1)
             return composing() || !sentence_.text.empty() || shift_.armed;
         if (shift_.armed)
             return true;
@@ -842,7 +890,8 @@ class TextService : public ITfTextInputProcessorEx,
             clear();
             return false;
         }
-        if (options_.direct || (GetKeyState(VK_CAPITAL) & 1)) {
+        if (options_.direct) return englishKey(ec, code);
+        if (GetKeyState(VK_CAPITAL) & 1) {
             literal(ec);
             clear();
             return false;
@@ -894,7 +943,7 @@ class TextService : public ITfTextInputProcessorEx,
                 clear();
                 return false;
             }
-            commit(ec, code == VK_TAB ? !options_.english : options_.english);
+            commit(ec, translationOnCommit(false, options_.english, options_.chinese, code == VK_TAB));
             return true;
         }
         if (code == VK_SPACE) {
@@ -1119,6 +1168,8 @@ class TextService : public ITfTextInputProcessorEx,
                         options_.english = !options_.english;
                     if (id == 3)
                         options_.privacy = !options_.privacy;
+                    if (id == 5)
+                        options_.chinese = !options_.chinese;
                     storeOptions();
                     language_->update();
                 };

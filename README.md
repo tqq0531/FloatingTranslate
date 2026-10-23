@@ -71,3 +71,7 @@ Initial development builds require dependency downloads. Large Android and Windo
 第三方组件保持各自许可：Rime BSD、拼音词库 Apache 2.0、OPUS-MT 模型 CC BY 4.0、ONNX Runtime / Extensions MIT；其余声明见各平台文档和安装包。Microsoft 运行库受其独立条款约束。
 
 Third-party components retain their own licenses: Rime BSD, Pinyin dictionaries Apache 2.0, OPUS-MT CC BY 4.0, and ONNX Runtime / Extensions MIT. See platform documentation and packaged notices for details. Microsoft runtime components have separate terms.
+
+Windows 开发分支 0.1.5 新增内置英译中模型，以及独立的“英文转换后默认输出中文”设置；英文模式按回车提交默认语言，Tab 提交另一语言。公开 Release 表中的版本仍是已发布版本。
+
+Windows development branch 0.1.5 adds bundled English-to-Chinese translation and an independent Chinese-default output preference. Enter commits the default language; Tab commits the alternative. The release table above lists previously published packages.

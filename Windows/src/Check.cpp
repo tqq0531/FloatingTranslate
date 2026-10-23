@@ -34,6 +34,12 @@ int wmain() {
                 throw std::runtime_error("Translation missing");
             std::cout << utf8(text) << " -> " << utf8(result) << "\n";
         }
+        for (auto text : {L"Hello.", L"Have you worked out today?", L"How are you?"}) {
+            auto result = engine.translate(text, [] { return false; }, true);
+            if (std::none_of(result.begin(), result.end(), [](wchar_t c) { return c >= 0x3400 && c <= 0x9fff; }))
+                throw std::runtime_error("English-to-Chinese translation missing");
+            std::cout << utf8(text) << " -> " << utf8(result) << "\n";
+        }
         std::cout << "Offline component tests passed. No registration or user input was used.\n";
         return 0;
     } catch (const std::exception &e) {

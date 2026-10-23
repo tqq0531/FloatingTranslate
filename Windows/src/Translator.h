@@ -62,13 +62,14 @@ inline void verifyModels() {
             throw std::runtime_error("Bundled model integrity check failed");
 }
 class Translator {
-    std::unique_ptr<TranslationModel> model_;
+    std::unique_ptr<TranslationModel> model_, reverseModel_;
+    bool verified_ = false;
 
   public:
-    void load() {
-        if (model_)
-            return;
-        verifyModels();
+    void load(bool toChinese = false) {
+        auto &selected = toChinese ? reverseModel_ : model_;
+        if (selected) return;
+        if (!verified_) { verifyModels(); verified_ = true; }
         auto dll = loadLocal(L"onnxruntime.dll");
         if (!dll)
             throw std::runtime_error("ONNX Runtime unavailable");
@@ -80,17 +81,19 @@ class Translator {
             throw std::runtime_error("Incompatible ONNX Runtime");
         Ort::InitApi(api);
         auto model = std::make_unique<TranslationModel>();
-        model->load(directory() / L"models", directory() / L"ortextensions.dll");
-        model_ = std::move(model);
+        model->load(toChinese ? directory() / L"models" / L"en-zh" : directory() / L"models",
+                    directory() / L"ortextensions.dll", toChinese);
+        selected = std::move(model);
     }
-    std::wstring translate(const std::wstring &source, const std::function<bool()> &cancelled) {
-        load();
-        return wide(model_->translate(utf8(source), cancelled));
+    std::wstring translate(const std::wstring &source, const std::function<bool()> &cancelled, bool toChinese = false) {
+        load(toChinese);
+        return wide((toChinese ? reverseModel_ : model_)->translate(utf8(source), cancelled));
     }
 };
 struct TranslationResult {
     uint64_t token = 0, ticket = 0;
     std::wstring source, text, status;
+    bool toChinese = false;
 };
 constexpr UINT WM_TRANSLATED = WM_APP + 101;
 struct TranslationTarget {
@@ -103,6 +106,7 @@ class TranslationWorker {
         std::weak_ptr<TranslationTarget> target;
         uint64_t ticket;
         std::wstring source;
+        bool toChinese = false;
     };
     std::mutex mutex_;
     std::condition_variable wake_;
@@ -134,8 +138,9 @@ class TranslationWorker {
             result->token = target->token;
             result->ticket = job.ticket;
             result->source = job.source;
+            result->toChinese = job.toChinese;
             try {
-                result->text = engine.translate(job.source, cancelled);
+                result->text = engine.translate(job.source, cancelled, job.toChinese);
             } catch (const std::length_error &) {
                 result->status = L"句子较长，请分句输入";
             } catch (...) {
@@ -156,10 +161,10 @@ class TranslationWorker {
                            (LPCWSTR)&verifyModels, &pinned);
         std::thread([this] { run(); }).detach();
     }
-    void submit(std::shared_ptr<TranslationTarget> target, uint64_t ticket, std::wstring source) {
+    void submit(std::shared_ptr<TranslationTarget> target, uint64_t ticket, std::wstring source, bool toChinese = false) {
         {
             std::lock_guard lock(mutex_);
-            pending_ = Job{target, ticket, std::move(source)};
+            pending_ = Job{target, ticket, std::move(source), toChinese};
         }
         wake_.notify_all();
     }

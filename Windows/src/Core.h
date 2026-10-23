@@ -5,6 +5,12 @@
 #include <string>
 #include <vector>
 namespace fuyi {
+// Each direction keeps an independent default; Tab requests the opposite.
+inline bool translationOnCommit(bool englishInput, bool pinyinToEnglish,
+                                bool englishToChinese, bool alternative) {
+    bool translated = englishInput ? englishToChinese : pinyinToEnglish;
+    return alternative ? !translated : translated;
+}
 struct Candidate {
     std::wstring text;
     size_t consumed = 0;

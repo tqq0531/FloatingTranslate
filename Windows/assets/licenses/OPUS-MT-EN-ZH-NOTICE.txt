@@ -1,0 +1,12 @@
+FloatingTranslate Windows bundled English-to-Chinese translation model
+Base model: Helsinki-NLP/opus-mt-en-zh
+https://huggingface.co/Helsinki-NLP/opus-mt-en-zh
+OPUS-MT, University of Helsinki; Jörg Tiedemann and Santhosh Thottingal.
+License: Apache License 2.0 (included alongside this notice).
+ONNX conversion: Xenova/opus-mt-en-zh
+https://huggingface.co/Xenova/opus-mt-en-zh
+Pinned revision: 046f55aec303cdee3e0318604406d4df20f1e8ea
+Int8 encoder and decoder weights are bundled unchanged. FloatingTranslate
+exports the SentencePiece tokenizer as ONNX, converts vocabulary/mapping to
+binary, and uses local greedy decoding with the >>cmn_Hans<< target prefix.
+The model has not been fine-tuned. Upstream licenses remain applicable.

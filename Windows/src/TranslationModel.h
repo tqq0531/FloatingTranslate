@@ -21,6 +21,7 @@ class TranslationModel {
     Ort::AllocatorWithDefaultOptions allocator_{nullptr};
     std::vector<int32_t> map_;
     std::vector<std::string> vocab_;
+    int64_t targetLanguage_ = -1;
     static uint32_t number(std::ifstream &in) {
         uint32_t n = 0;
         in.read((char *)&n, 4);
@@ -30,7 +31,7 @@ class TranslationModel {
     }
 
   public:
-    void load(const std::filesystem::path &base, const std::filesystem::path &extension) {
+    void load(const std::filesystem::path &base, const std::filesystem::path &extension, bool chineseTarget = false) {
         if (encoder_)
             return;
         auto api = &Ort::GetApi();
@@ -59,6 +60,11 @@ class TranslationModel {
                 throw std::runtime_error("Invalid vocabulary token");
             vocab_.push_back(token);
         }
+        if (chineseTarget) {
+            auto token = std::find(vocab_.begin(), vocab_.end(), ">>cmn_Hans<<");
+            if (token == vocab_.end()) throw std::runtime_error("Simplified Chinese target token missing");
+            targetLanguage_ = (int64_t)(token - vocab_.begin());
+        }
         Ort::SessionOptions options;
         options.SetIntraOpNumThreads(2);
         options.SetInterOpNumThreads(1);
@@ -86,6 +92,7 @@ class TranslationModel {
             throw std::length_error("Sentence too long");
         const auto *pieces = tokenized[0].GetTensorData<int64_t>();
         std::vector<int64_t> ids;
+        if (targetLanguage_ >= 0) ids.push_back(targetLanguage_);
         for (size_t i = 0; i < n; i++) {
             if (pieces[i] < 0 || (size_t)pieces[i] >= map_.size())
                 throw std::runtime_error("Invalid source token");

@@ -70,7 +70,7 @@ inline fs::path configPath() {
     return path / L"settings.ini";
 }
 struct Options {
-    bool english = false, above = false, privacy = false, direct = false, remember = true;
+    bool english = false, above = false, privacy = false, direct = false, remember = true, chinese = false;
     static Options read() {
         Options o;
         try {
@@ -85,6 +85,7 @@ struct Options {
             o.above = GetPrivateProfileIntW(L"input", L"placementVersion", 0, p.c_str()) >= 2 &&
                       GetPrivateProfileIntW(L"input", L"above", 0, p.c_str()) != 0;
             o.privacy = GetPrivateProfileIntW(L"input", L"privacy", 0, p.c_str()) != 0;
+            o.chinese = GetPrivateProfileIntW(L"input", L"chineseDefault", 0, p.c_str()) != 0;
             o.remember = GetPrivateProfileIntW(L"input", L"remember", 1, p.c_str()) != 0;
             o.direct = GetPrivateProfileIntW(L"input", L"directEnglish", 0, p.c_str()) != 0;
         } catch (...) {
@@ -97,7 +98,7 @@ struct Options {
         for (auto entry : std::vector<std::pair<const wchar_t *, bool>>{{L"englishDefault", english},
                                                                         {L"above", above},
                                                                         {L"privacy", privacy},
-                                                                        {L"directEnglish", direct}, {L"remember", remember}})
+                                                                        {L"directEnglish", direct}, {L"remember", remember}, {L"chineseDefault", chinese}})
             if (!WritePrivateProfileStringW(L"input", entry.first, entry.second ? L"1" : L"0", p.c_str()))
                 throw std::runtime_error("Cannot save settings");
         if (!WritePrivateProfileStringW(L"input", L"placementVersion", L"2", p.c_str()))

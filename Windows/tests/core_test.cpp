@@ -5,6 +5,13 @@
 #include <iostream>
 using namespace fuyi;
 int main() {
+    assert(translationOnCommit(false, true, false, false));
+    assert(!translationOnCommit(false, false, true, false));
+    assert(translationOnCommit(true, false, true, false));
+    assert(!translationOnCommit(true, true, false, false));
+    assert(!translationOnCommit(false, true, true, true));
+    assert(!translationOnCommit(true, true, true, true));
+    assert(translationOnCommit(true, false, false, true));
     Sentence s;
     s.begin(100);
     s.append(L"我", 100);

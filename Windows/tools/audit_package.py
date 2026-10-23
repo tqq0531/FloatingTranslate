@@ -32,15 +32,17 @@ def audit(path):
  with zipfile.ZipFile(path) as z:
   assert z.testzip() is None,'ZIP CRC mismatch'
   names=set(z.namelist());root='FloatingTranslate/'
-  required=['FuyiIME.dll','FuyiSettings.exe','FuyiCheck.exe','FuyiCoreTest.exe','librime.dll','onnxruntime.dll','ortextensions.dll','vc_redist.x64.exe','启用浮译.cmd','停用浮译.cmd','使用说明.txt','RimeData/build/fuyi.schema.yaml','RimeData/build/pinyin_simp.table.bin','licenses/CC-BY-4.0.txt','licenses/TRANSLATION-NOTICE.txt']
+  required=['FuyiIME.dll','FuyiSettings.exe','FuyiCheck.exe','FuyiCoreTest.exe','librime.dll','onnxruntime.dll','ortextensions.dll','vc_redist.x64.exe','启用浮译.cmd','停用浮译.cmd','使用说明.txt','RimeData/build/fuyi.schema.yaml','RimeData/build/pinyin_simp.table.bin','licenses/CC-BY-4.0.txt','licenses/TRANSLATION-NOTICE.txt','licenses/OPUS-MT-EN-ZH-APACHE-2.0.txt','licenses/OPUS-MT-EN-ZH-NOTICE.txt']
   for name in required:assert root+name in names,'Missing '+name
   sums=z.read(root+'SHA256SUMS.txt').decode().splitlines()
   for line in sums:
    sha,name=line.split('  ',1);assert hashlib.sha256(z.read(root+name)).hexdigest()==sha,'Corrupt '+name
   assert len(sums)==len(names)-1,'Unlisted files in package'
-  models=json.loads(z.read(root+'models/manifest.json'))
-  for item in models['files']:
-   data=z.read(root+'models/'+item['file']);assert len(data)==item['bytes'] and hashlib.sha256(data).hexdigest()==item['sha256']
+  for model_dir in ['models/','models/en-zh/']:
+   models=json.loads(z.read(root+model_dir+'manifest.json'))
+   assert len(models['files'])==5,'Incomplete model bundle'
+   for item in models['files']:
+    data=z.read(root+model_dir+item['file']);assert len(data)==item['bytes'] and hashlib.sha256(data).hexdigest()==item['sha256']
   system={'kernel32.dll','user32.dll','advapi32.dll','ole32.dll','oleaut32.dll','gdi32.dll','shell32.dll','bcrypt.dll','comctl32.dll','dbghelp.dll','setupapi.dll','dxgi.dll','windowscodecs.dll','ntdll.dll','ucrtbase.dll','msvcrt.dll','version.dll','shlwapi.dll','crypt32.dll'}
   included={pathlib.PurePosixPath(name).name.lower() for name in names}
   for name in sorted(names):
@@ -50,6 +52,6 @@ def audit(path):
     d=dependency.lower();assert d not in {'winhttp.dll','wininet.dll','ws2_32.dll','urlmon.dll'},'Network dependency: '+name
     assert d in system or d in included or d.startswith(('api-ms-win-','ext-ms-win-','msvcp140','vcruntime140')),'Missing native dependency: '+dependency
    if name.endswith('FuyiIME.dll'):assert set(exports)=={'DllGetClassObject','DllCanUnloadNow','DllRegisterServer','DllUnregisterServer'}
-  print('ZIP CRC,',len(sums),'file checksums,',len(models['files']),'models, x64 PE/TSF exports and native dependencies passed.')
+  print('ZIP CRC,',len(sums),'file checksums,',10,'bidirectional model files, x64 PE/TSF exports and native dependencies passed.')
 
 if __name__=='__main__':audit(pathlib.Path(sys.argv[1]))
