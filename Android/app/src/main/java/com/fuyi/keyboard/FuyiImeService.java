@@ -60,16 +60,16 @@ public final class FuyiImeService extends InputMethodService {
             v.setPadding(Ui.dp(this,2),0,Ui.dp(this,2),bottom+Ui.dp(this,4));return insets;
         });
         toolbar=new LinearLayout(this);toolbar.setGravity(Gravity.CENTER_VERTICAL);toolbar.setPadding(Ui.dp(this,10),0,Ui.dp(this,10),0);
-        Button brand=Ui.tool(this,"译","浮译设置",this::openSettings);brand.setTextColor(Ui.GREEN);
+        Button brand=Ui.tool(this,"译","浮译设置",this::openSettings);brand.setTextColor(android.graphics.Color.WHITE);brand.setBackground(Ui.round(Ui.GREEN,12,this));
         toolbar.addView(brand,new LinearLayout.LayoutParams(Ui.dp(this,38),Ui.dp(this,38)));
-        toolbar.addView(new View(this),new LinearLayout.LayoutParams(0,1,1));
+        TextView signature=Ui.text(this,"浮译",15,Ui.INK);signature.setPadding(Ui.dp(this,10),0,0,0);toolbar.addView(signature,new LinearLayout.LayoutParams(0,-2,1));
         historyButton=Ui.tool(this,"剪贴板","剪贴板",()->{if(!privateField){flushRaw();historyOpen=true;renderHistory();}});
         toolbar.addView(historyButton,new LinearLayout.LayoutParams(Ui.dp(this,78),Ui.dp(this,38)));
         Button settings=Ui.tool(this,"⚙","设置",this::openSettings);addTool(toolbar,settings);
         Button hide=Ui.tool(this,"⌄","收起键盘",()->requestHideSelf(0));addTool(toolbar,hide);
         root.addView(toolbar,new LinearLayout.LayoutParams(-1,Ui.dp(this,50)));
         englishView=Ui.text(this,"",16,Ui.INK);englishView.setPadding(Ui.dp(this,14),Ui.dp(this,7),Ui.dp(this,14),Ui.dp(this,7));
-        englishView.setMaxLines(2);englishView.setOnLongClickListener(v->{copyEnglish();return true;});root.addView(englishView);
+        englishView.setMaxLines(2);englishView.setOnLongClickListener(v->{copyEnglish();return true;});englishView.setBackground(Ui.round(android.graphics.Color.rgb(246,250,249),12,this));LinearLayout.LayoutParams translationParams=new LinearLayout.LayoutParams(-1,-2);translationParams.setMargins(Ui.dp(this,8),Ui.dp(this,6),Ui.dp(this,8),Ui.dp(this,6));root.addView(englishView,translationParams);
         compositionView=Ui.text(this,"",13,Ui.MUTED);compositionView.setMaxLines(1);compositionView.setEllipsize(android.text.TextUtils.TruncateAt.END);compositionView.setPadding(Ui.dp(this,14),0,0,0);root.addView(compositionView);
         candidateScroll=new HorizontalScrollView(this);candidateScroll.setHorizontalScrollBarEnabled(false);
         candidateRow=new LinearLayout(this);candidateScroll.addView(candidateRow);root.addView(candidateScroll,new LinearLayout.LayoutParams(-1,Ui.dp(this,44)));
@@ -171,8 +171,8 @@ public final class FuyiImeService extends InputMethodService {
         historyButton.setEnabled(!privateField);
         candidateRow.removeAllViews();
         for(var candidate:candidates) {
-            Button b=Ui.tool(this,candidate.text(),candidate.text(),()->choose(candidate));b.setTextSize(20);b.setBackgroundColor(android.graphics.Color.TRANSPARENT);
-            candidateRow.addView(b,new LinearLayout.LayoutParams(-2,Ui.dp(this,42)));
+            Button b=Ui.tool(this,candidate.text(),candidate.text(),()->choose(candidate));b.setTextSize(20);if(candidate==candidates.get(0)){b.setTextColor(android.graphics.Color.WHITE);b.setBackground(Ui.round(Ui.GREEN,11,this));}else {b.setTextColor(Ui.INK);b.setBackgroundColor(android.graphics.Color.TRANSPARENT);}
+            LinearLayout.LayoutParams candidateParams=new LinearLayout.LayoutParams(-2,Ui.dp(this,38));candidateParams.setMargins(Ui.dp(this,4),Ui.dp(this,2),Ui.dp(this,4),Ui.dp(this,2));candidateRow.addView(b,candidateParams);
         }
         compositionView.setText(privateField?"密码输入：不翻译、不读取剪贴板":latin?"":sentence.isEmpty()?raw:sentence+(raw.isEmpty()?"":" · "+raw));
         compositionView.setContentDescription(privateField?"安全输入":"当前中文句子："+sentence);
@@ -238,7 +238,7 @@ public final class FuyiImeService extends InputMethodService {
     }
     private void addSpacer(LinearLayout line,float weight){line.addView(new View(this),new LinearLayout.LayoutParams(0,1,weight));}
     private Button addKey(LinearLayout line,String label,String description,float weight,int color,Runnable action,boolean repeat){
-        Button b=Ui.key(this,label,description,color,action,repeat);line.addView(b,new LinearLayout.LayoutParams(0,Ui.dp(this,58),weight));return b;
+        Button b=Ui.key(this,label,description,color,action,repeat);line.addView(b,new LinearLayout.LayoutParams(0,Ui.dp(this,56),weight));return b;
     }
     private String enterLabel(){
         EditorInfo info=getCurrentInputEditorInfo();if(info==null||(info.imeOptions&EditorInfo.IME_FLAG_NO_ENTER_ACTION)!=0)return "换行";

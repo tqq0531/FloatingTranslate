@@ -10,7 +10,7 @@ import android.view.HapticFeedbackConstants;
 import android.view.Gravity;
 import android.widget.*;
 final class Ui {
-    static final int INK=Color.rgb(24,34,53), MUTED=Color.rgb(103,114,135), BLUE=Color.rgb(41,98,255), BG=Color.rgb(244,246,251);
+    static final int INK=Color.rgb(24,34,53), MUTED=Color.rgb(103,114,135), BLUE=Color.rgb(22,119,116), BG=Color.rgb(244,246,251);
     static int dp(Context c,float n) { return Math.round(n*c.getResources().getDisplayMetrics().density); }
     static GradientDrawable round(int color,int radius,Context c) { GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(c,radius));return d; }
     static TextView text(Context c,String s,int size,int color) { TextView v=new TextView(c);v.setText(s);v.setTextSize(size);v.setTextColor(color);return v; }
@@ -19,7 +19,7 @@ final class Ui {
         b.setMinWidth(0);b.setMinimumWidth(0);b.setPadding(dp(c,8),0,dp(c,8),0);
         b.setBackground(round(Color.WHITE,10,c));b.setOnClickListener(v -> action.run());return b;
     }
-    static final int KEYBOARD=Color.rgb(222,224,230), FUNCTION=Color.rgb(182,187,197), GREEN=Color.rgb(28,193,145);
+    static final int KEYBOARD=Color.rgb(232,240,239), FUNCTION=Color.rgb(207,224,222), GREEN=Color.rgb(22,119,116);
     // InputMethodService uses the platform Theme.InputMethod, not an AppCompat Activity.
     @android.annotation.SuppressLint("AppCompatCustomView")
     static Button key(Context c,String label,String description,int color,Runnable action,boolean repeat) {
@@ -46,17 +46,17 @@ final class Ui {
             @Override protected void onDetachedFromWindow(){removeCallbacks(tick);super.onDetachedFromWindow();}
             @Override protected void onWindowVisibilityChanged(int visibility){if(visibility!=VISIBLE&&tick!=null)removeCallbacks(tick);super.onWindowVisibilityChanged(visibility);}
         };
-        b.setText(label);b.setContentDescription(description);b.setTextSize(22);b.setTextColor(color==GREEN?Color.WHITE:Color.rgb(20,23,29));b.setAllCaps(false);
+        b.setText(label);b.setContentDescription(description);b.setTextSize(21);b.setTypeface(android.graphics.Typeface.create("sans-serif-medium",0));b.setTextColor(color==GREEN?Color.WHITE:Color.rgb(32,56,57));b.setAllCaps(false);
         b.setMinWidth(0);b.setMinimumWidth(0);b.setMinHeight(0);b.setMinimumHeight(0);b.setPadding(0,0,0,0);b.setIncludeFontPadding(false);
         b.setStateListAnimator(null);b.setElevation(0);
-        var shape=round(color,6,c);shape.setStroke(dp(c,0.5f),color==GREEN?GREEN:Color.rgb(199,202,209));
-        var ripple=new RippleDrawable(ColorStateList.valueOf(Color.argb(45,30,40,60)),shape,null);
-        b.setBackground(new InsetDrawable(ripple,dp(c,2.5f),dp(c,4),dp(c,2.5f),dp(c,4)));
+        var shape=round(color,10,c);shape.setStroke(dp(c,0.5f),color==GREEN?GREEN:Color.rgb(208,224,222));
+        var ripple=new RippleDrawable(ColorStateList.valueOf(Color.argb(45,22,119,116)),shape,null);
+        b.setBackground(new InsetDrawable(ripple,dp(c,3),dp(c,4),dp(c,3),dp(c,4)));
         b.setOnClickListener(v->action.run());return b;
     }
     static Button tool(Context c,String label,String description,Runnable action){
         Button b=button(c,label,action);b.setContentDescription(description);b.setTextSize(17);b.setStateListAnimator(null);b.setElevation(0);
-        b.setMinHeight(0);b.setMinimumHeight(0);b.setBackground(new RippleDrawable(ColorStateList.valueOf(0x22192330),round(Color.WHITE,22,c),null));return b;
+        b.setMinHeight(0);b.setMinimumHeight(0);b.setBackground(new RippleDrawable(ColorStateList.valueOf(0x22192330),round(Color.rgb(244,249,248),12,c),null));return b;
     }
     static LinearLayout column(Context c) { LinearLayout v=new LinearLayout(c);v.setOrientation(LinearLayout.VERTICAL);return v; }
 }

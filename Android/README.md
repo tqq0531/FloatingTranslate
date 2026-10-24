@@ -86,3 +86,9 @@ APK：`app/build/outputs/apk/debug/app-debug.apk`。最低 Android 8.0 / API 26�
 - [OPUS-MT 基础模型与模型卡](https://huggingface.co/Helsinki-NLP/opus-mt-zh-en)（CC BY 4.0）和 [固定 ONNX 转换来源](https://huggingface.co/Xenova/opus-mt-zh-en/tree/39d480d52a9ea3065a1f117adfe4dbc55de10e6f)
 - [ONNX Runtime Java](https://onnxruntime.ai/docs/get-started/with-java.html) 与 [Extensions](https://onnxruntime.ai/docs/extensions/)（MIT）
 - 拼音词库来源与 Apache 2.0 许可见仓库 `Resources/RIME-LICENSE.txt`。各组件保持自己的许可证，不以本仓库许可覆盖。
+
+## 0.1.5 键盘外观 / Keyboard appearance
+雾白与墨青配色、青绿操作键和首选词高亮；调整圆角、字重与按键间距，保留错位 QWERTY 布局与完整触控区域。模型随 APK 内置，剪贴板历史仍只保留 24 小时。
+Mist-white keys, ink-teal labels and teal action/candidate accents with refined spacing and typography. Staggered QWERTY touch areas, bundled offline translation and 24-hour clipboard retention remain available.
+
+验证：Android 模拟器 5 项键盘测试通过（含退格长按、中英切换、剪贴板、发送键及密码框），单元测试和 debug APK 构建通过。
