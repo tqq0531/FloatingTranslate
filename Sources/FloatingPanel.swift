@@ -172,7 +172,7 @@ final class FloatingPanel: NSObject, NSWindowDelegate {
         background.frame = content.bounds
         background.autoresizingMask = [.width, .height]
         content.addSubview(background)
-        translationText.font = .systemFont(ofSize: 15, weight: .medium)
+        translationText.font = .systemFont(ofSize: 13, weight: .medium)
         translationText.isEditable = false; translationText.isSelectable = true
         translationText.isRichText = false; translationText.drawsBackground = false
         translationText.textContainerInset = .zero
@@ -206,16 +206,16 @@ final class FloatingPanel: NSObject, NSWindowDelegate {
     private func render(_ state: RenderState, screenWidth: CGFloat) {
         rendered = state
         badge.stringValue = state.toChinese ? "中" : "EN"
-        let maxWidth = min(580, screenWidth - 16)
+        let maxWidth = min(460, screenWidth - 16)
         let page = Array(state.choices.enumerated().dropFirst((state.selected / 5) * 5).prefix(5))
-        let widths = page.map { min(165, max(44, ($0.element.text as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 19)]).width + 30)) }
+        let widths = page.map { min(145, max(34, ($0.element.text as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 15)]).width + 22)) }
         let rowWidth = widths.reduce(0, +) + CGFloat(max(0, page.count - 1)) * 4 + 16
         let desiredEnglish = (state.text as NSString).size(withAttributes: [.font: translationText.font!]).width + 80
-        let width = min(maxWidth, max(260, max(min(desiredEnglish, 460), rowWidth)))
+        let width = min(maxWidth, max(150, max(min(desiredEnglish, 360), rowWidth)))
         let textHeight = (state.text as NSString).boundingRect(with: NSSize(width: width - 80, height: 70), options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: [.font: translationText.font!]).height
-        let englishHeight = min(60, max(20, ceil(textHeight)))
-        let englishBand = englishHeight + 18
-        let candidateBand: CGFloat = page.isEmpty ? 0 : 40
+        let englishHeight = min(60, max(17, ceil(textHeight)))
+        let englishBand = englishHeight + 10
+        let candidateBand: CGFloat = page.isEmpty ? 0 : 30
         let height = englishBand + candidateBand
         panel.setContentSize(NSSize(width: width, height: height))
         background.frame = content.bounds
@@ -225,31 +225,31 @@ final class FloatingPanel: NSObject, NSWindowDelegate {
             return true
         }
         panel.invalidateShadow()
-        let englishBottom = state.above ? candidateBand + 9 : 9
+        let englishBottom = state.above ? candidateBand + 5 : 5
         translationText.frame = NSRect(x: 36, y: englishBottom, width: width - 80, height: englishHeight)
         if translationText.string != state.text { translationText.string = state.text; finishTextSelection() }
         translationText.translationReady = state.ready
         copyButton.isEnabled = state.ready
-        copyButton.frame = NSRect(x: width - 32, y: englishBottom + englishHeight - 22, width: 24, height: 24)
+        copyButton.frame = NSRect(x: width - 32, y: englishBottom + englishHeight - 19, width: 20, height: 20)
         translationText.textColor = state.ready ? .labelColor : .secondaryLabelColor
         badge.frame = NSRect(x: 11, y: englishBottom + englishHeight - 15, width: 22, height: 13)
         separator.isHidden = page.isEmpty
         separator.frame = NSRect(x: 8, y: state.above ? candidateBand : englishBand, width: width - 16, height: 1)
         buttons.forEach { $0.removeFromSuperview() }; buttons = []
         var x: CGFloat = 8
-        let rowBottom: CGFloat = state.above ? 5 : englishBand + 5
+        let rowBottom: CGFloat = state.above ? 3 : englishBand + 3
         for (offset, item) in page.enumerated() {
             let buttonWidth = min(widths[offset], width - x - 8)
-            guard buttonWidth >= 36 else { break }
+            guard buttonWidth >= 28 else { break }
             let button = NSButton(title: "", target: self, action: #selector(choose(_:)))
             button.tag = item.offset; button.isBordered = false; button.refusesFirstResponder = true
-            button.frame = NSRect(x: x, y: rowBottom, width: buttonWidth, height: 30)
-            button.wantsLayer = true; button.layer?.cornerRadius = 13
+            button.frame = NSRect(x: x, y: rowBottom, width: buttonWidth, height: 24)
+            button.wantsLayer = true; button.layer?.cornerRadius = 9
             let selected = item.offset == state.selected
             button.layer?.backgroundColor = selected ? NSColor.controlAccentColor.cgColor : NSColor.clear.cgColor
             let color: NSColor = selected ? .white : .labelColor
             let title = NSMutableAttributedString(string: "\(offset + 1) ", attributes: [.font: NSFont.systemFont(ofSize: 10), .foregroundColor: color])
-            title.append(NSAttributedString(string: item.element.text, attributes: [.font: NSFont.systemFont(ofSize: 19, weight: .medium), .foregroundColor: color]))
+            title.append(NSAttributedString(string: item.element.text, attributes: [.font: NSFont.systemFont(ofSize: 15, weight: .medium), .foregroundColor: color]))
             button.attributedTitle = title
             button.cell?.lineBreakMode = .byTruncatingTail
             background.addSubview(button); buttons.append(button)

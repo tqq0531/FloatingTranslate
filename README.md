@@ -93,3 +93,7 @@ Mac 0.5.15: English composition uses a transparent background with no underline 
 
 Mac 0.5.16：尚未上屏的分段拼音中，退格先撤回最近一次选词并恢复拼音，保留未选部分；整句上屏后仍按普通退格删除。
 Backspace reopens the last selected segment in an active Pinyin composition, preserving its remaining input. Committed text uses normal deletion.
+
+Mac 0.5.17：候选框采用更紧凑的系统风格，候选字号 15 pt、译文字号 13 pt，常规双行高度由 78 pt 缩至约 57 pt；宽度随内容调整，保留透明圆角、翻译复制和退格重新选词。
+
+Mac 0.5.17: the compact panel uses 15 pt candidates and 13 pt translations, reducing its usual two-row height from 78 pt to about 57 pt. Width adapts to content while preserving transparent corners, translation copying, and Backspace reselection.
