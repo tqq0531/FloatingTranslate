@@ -22,6 +22,7 @@ class Panel {
     HWND window_ = nullptr, tooltip_ = nullptr, owner_ = nullptr;
     ULONG_PTR graphicsToken_ = 0;
     bool glass_ = false;
+    bool layered_ = false;
     std::wstring pendingCopy_, copyTip_ = L"复制译文";
     int copyState_ = 0, copyAttempts_ = 0;
     DWORD copyError_ = ERROR_SUCCESS;
@@ -213,7 +214,9 @@ class Panel {
                 Gdiplus::Pen pen(stroke, std::max(1.0f,scale_/96.0f)); g.DrawPath(&pen,&path);
             };
             RECT card{0,0,width_,height_};
-            rounded(card, d(PanelStyle::cornerDiameter/2), Gdiplus::Color(40,70,73,82), Gdiplus::Color(20,31,34,42),
+            rounded(card, d(PanelStyle::cornerDiameter/2),
+                    glass_?Gdiplus::Color(40,70,73,82):Gdiplus::Color(255,49,50,55),
+                    glass_?Gdiplus::Color(20,31,34,42):Gdiplus::Color(255,37,38,42),
                     Gdiplus::Color(85,210,217,232));
             Gdiplus::Font english(dc,font_), small(dc,small_), candidate(dc,candidateFont_);
             Gdiplus::StringFormat format(Gdiplus::StringFormat::GenericTypographic());
@@ -289,13 +292,23 @@ class Panel {
         if(bitmap) {
             for(int y=0;y<height_;++y)memcpy((BYTE*)pixels+y*width_*4,(BYTE*)data.Scan0+y*data.Stride,width_*4);
             HDC source=CreateCompatibleDC(dc);auto old=SelectObject(source,bitmap);
-            BitBlt(dc,0,0,width_,height_,source,0,0,SRCCOPY);
+            if(layered_ && window_) {
+                POINT origin{}; SIZE size{width_,height_};
+                BLENDFUNCTION blend{AC_SRC_OVER,0,255,AC_SRC_ALPHA};
+                if(!UpdateLayeredWindow(window_,dc,nullptr,&size,source,&origin,0,&blend,ULW_ALPHA)) {
+                    // Retain usable candidates when a host/compositor refuses
+                    // per-pixel surfaces; never alter the host's window state.
+                    layered_=false;
+                    SetWindowLongPtrW(window_,GWL_EXSTYLE,GetWindowLongPtrW(window_,GWL_EXSTYLE)&~WS_EX_LAYERED);
+                    BitBlt(dc,0,0,width_,height_,source,0,0,SRCCOPY);
+                }
+            } else BitBlt(dc,0,0,width_,height_,source,0,0,SRCCOPY);
             SelectObject(source,old);DeleteDC(source);DeleteObject(bitmap);
         }
         image.UnlockBits(&data);
     }
     void render(HDC dc) {
-        if(glass_ && graphicsToken_){renderGlass(dc);return;}
+        if((glass_ || layered_) && graphicsToken_){renderGlass(dc);return;}
         RECT client{0, 0, width_, height_};
         HDC back = CreateCompatibleDC(dc);
         HBITMAP bitmap = CreateCompatibleBitmap(dc, width_, height_);
@@ -540,7 +553,8 @@ class Panel {
         // window created inside Search/AppContainer is shell-cloaked.
         wc.style = CS_IME;
         RegisterClassW(&wc);
-        CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST, wc.lpszClassName,
+        layered_=graphicsToken_!=0;
+        CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST | (layered_?WS_EX_LAYERED:0), wc.lpszClassName,
                         L"浮译", WS_POPUP, 0, 0, width_, height_, owner_, nullptr, module, this);
         if(window_)glass_=graphicsToken_ && enableGlass(window_);
         INITCOMMONCONTROLSEX controls = {sizeof(controls), ICC_WIN95_CLASSES};
@@ -666,8 +680,13 @@ class Panel {
             hide();
             return;
         }
-        HRGN shape = CreateRoundRectRgn(0, 0, width_ + 1, height_ + 1, d(PanelStyle::cornerDiameter), d(PanelStyle::cornerDiameter));
-        if (shape && !SetWindowRgn(window_, shape, FALSE)) DeleteObject(shape);
+        // A window region is a one-bit mask: it cuts antialiased pixels into
+        // stair steps. A per-pixel surface carries the complete smooth edge.
+        if(layered_) SetWindowRgn(window_,nullptr,FALSE);
+        else {
+            HRGN shape = CreateRoundRectRgn(0, 0, width_ + 1, height_ + 1, d(PanelStyle::cornerDiameter), d(PanelStyle::cornerDiameter));
+            if (shape && !SetWindowRgn(window_, shape, FALSE)) DeleteObject(shape);
+        }
         SetWindowPos(window_, HWND_TOPMOST, r->left, r->top, width_, height_, SWP_NOACTIVATE);
         RedrawWindow(window_, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
         bool wasVisible=IsWindowVisible(window_)!=FALSE;

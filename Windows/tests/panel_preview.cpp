@@ -3,9 +3,19 @@
 #define FUYI_PANEL_PREVIEW
 #include "../src/Panel.h"
 #include <cassert>
+#include <iostream>
 namespace fuyi {
 HINSTANCE module = nullptr;
 struct PanelPreview {
+    static void nativeCheck() {
+        Panel panel;
+        panel.english_=L"Native alpha edge check";
+        panel.createWindow(); panel.layout(500,300);
+        SetWindowPos(panel.window_,nullptr,0,0,panel.width_,panel.height_,SWP_NOACTIVATE|SWP_NOZORDER);
+        HDC dc=GetDC(panel.window_); panel.renderGlass(dc); ReleaseDC(panel.window_,dc);
+        assert(panel.layered_);
+        std::cout<<"Native per-pixel surface accepted; backdrop="<<panel.glass_<<"\n";
+    }
     static void save(const wchar_t *file, int dpi, bool glass) {
         Panel panel;
         panel.scale_ = dpi; panel.fonts();
@@ -35,6 +45,7 @@ struct PanelPreview {
 };
 }
 int wmain(int argc, wchar_t **argv) {
+    if(argc==2 && wcscmp(argv[1],L"--native-check")==0){fuyi::PanelPreview::nativeCheck();return 0;}
     if (argc < 3) return 2;
     fuyi::PanelDpiScope dpi;
     fuyi::PanelPreview::save(argv[1], _wtoi(argv[2]), argc > 3);
