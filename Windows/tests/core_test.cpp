@@ -6,6 +6,21 @@
 #include <iostream>
 using namespace fuyi;
 int main() {
+    assert(insertedSentence(L"我去北京", 1, L"今天") == L"我今天去北京");
+    assert(insertedSentence(L"我去北京", 0, L"明天") == L"明天我去北京");
+    assert(insertedSentence(L"我去北京", 4, L"。") == L"我去北京。");
+    assert(insertedSentence(L"", 20, L"你好") == L"你好");
+    assert(insertedSentence(L"I like music", 7, L"quiet ") == L"I like quiet music");
+    std::string pending = "jintian";
+    std::wstring selected = L"你好";
+    std::vector<std::pair<std::string, std::wstring>> undo{{"nihao", L""}};
+    assert(backspacePinyin(pending, selected, undo));
+    assert(pending == "jintia" && selected == L"你好" && undo.size() == 1);
+    while (!pending.empty()) assert(backspacePinyin(pending, selected, undo));
+    assert(backspacePinyin(pending, selected, undo));
+    assert(pending == "nihao" && selected.empty() && undo.empty());
+    while (!pending.empty()) assert(backspacePinyin(pending, selected, undo));
+    assert(!backspacePinyin(pending, selected, undo)); // Committed text belongs to host.
     EnglishProofreader proof;
     auto advice=proof.check(L"I want go to gym now");
     assert(advice.corrected==L"I want to go to the gym now");
@@ -100,6 +115,12 @@ int main() {
     std::vector<Candidate> again{{L"是", 3}, {L"事", 3}};
     restored.rank("shi", again);
     assert(again.front().text == L"事");
+    std::vector<Candidate> deferred{{L"是", 0, 0}, {L"事", 0, 1}};
+    restored.rank("shi", deferred, [](Candidate &c) { c.consumed = 3; });
+    assert(deferred.front().text == L"事" && deferred.front().consumed == 3);
+    deferred = {{L"是什么", 0, 0}, {L"事", 0, 1}};
+    restored.rank("shishenme", deferred, [](Candidate &c) { c.consumed = 3; });
+    assert(deferred.front().text == L"是什么");
     assert(candidatePage(0, 13, true) == 5);
     assert(candidatePage(8, 13, true) == 10);
     assert(candidatePage(10, 13, true) == 10);

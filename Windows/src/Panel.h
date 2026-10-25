@@ -5,6 +5,14 @@
 #include <windowsx.h>
 #include <commctrl.h>
 namespace fuyi {
+// TSF runs inside hosts with different DPI awareness. Draw the popup at its
+// monitor's physical resolution rather than letting Windows scale a bitmap.
+struct PanelDpiScope {
+    using SetContext = HANDLE(WINAPI *)(HANDLE);
+    SetContext set = (SetContext)GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetThreadDpiAwarenessContext");
+    HANDLE previous = set ? set((HANDLE)-4) : nullptr;
+    ~PanelDpiScope() { if (set && previous) set(previous); }
+};
 class Panel {
     HWND window_ = nullptr, tooltip_ = nullptr;
     std::wstring pendingCopy_, copyTip_ = L"复制译文";
@@ -160,8 +168,8 @@ class Panel {
         HBRUSH transparent = CreateSolidBrush(RGB(1, 2, 3));
         FillRect(back, &client, transparent); DeleteObject(transparent);
         RECT card = {0, 0, width_, height_};
-        surface(back, card, d(PanelStyle::cornerDiameter), RGB(248, 249, 251), RGB(238, 240, 244),
-                RGB(202, 207, 214));
+        surface(back, card, d(PanelStyle::cornerDiameter), RGB(247, 248, 250), RGB(247, 248, 250),
+                RGB(163, 173, 187));
         // Keep both text and selection inside the rounded, transparent window.
         HRGN clip = CreateRoundRectRgn(1, 1, width_ - 1, height_ - 1, d(PanelStyle::cornerDiameter), d(PanelStyle::cornerDiameter));
         SelectClipRgn(back, clip); DeleteObject(clip);
@@ -199,7 +207,7 @@ class Panel {
             if (r.bottom < 0 || r.top >= height_) continue;
             bool active = choice.index == selected_;
             if (active) {
-                surface(back, r, d(26), RGB(38, 145, 255), RGB(0, 119, 245));
+                surface(back, r, d(12), RGB(0, 112, 232), RGB(0, 112, 232), RGB(0, 94, 203));
             }
             SetTextColor(back, active ? RGB(255, 255, 255) : RGB(70, 76, 86));
             SelectObject(back, small_);
@@ -354,6 +362,7 @@ class Panel {
     std::function<void(size_t)> choose;
     std::function<void()> applyCorrection;
     Panel() {
+        PanelDpiScope dpiScope;
         WNDCLASSW wc = {};
         wc.lpfnWndProc = proc;
         wc.hInstance = module;
@@ -363,10 +372,8 @@ class Panel {
         // the corners even in remote desktop compositors.
         wc.style = 0;
         RegisterClassW(&wc);
-        CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST | WS_EX_LAYERED, wc.lpszClassName,
+        CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST, wc.lpszClassName,
                         L"浮译", WS_POPUP, 0, 0, width_, height_, nullptr, nullptr, module, this);
-        if (window_)
-            SetLayeredWindowAttributes(window_, RGB(1, 2, 3), 255, LWA_COLORKEY);
         INITCOMMONCONTROLSEX controls = {sizeof(controls), ICC_WIN95_CLASSES};
         InitCommonControlsEx(&controls);
         tooltip_ = CreateWindowExW(WS_EX_TOPMOST | WS_EX_NOACTIVATE, TOOLTIPS_CLASSW, nullptr,
@@ -425,6 +432,7 @@ class Panel {
     }
     void show(RECT anchor, const std::wstring &english, const std::wstring &status, const std::wstring &raw,
               const std::vector<Candidate> &choices, size_t selected, bool above, bool toChinese = false, const std::wstring &correction=L"", const std::wstring &advice=L"") {
+        PanelDpiScope dpiScope;
         if (!window_)
             return;
         if (english_ != english) {

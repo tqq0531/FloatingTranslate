@@ -133,7 +133,7 @@ class TranslationWorker {
             // Debounce without keeping a queue of old input snapshots.
             {
                 std::unique_lock lock(mutex_);
-                if (wake_.wait_for(lock, std::chrono::milliseconds(280),
+                if (wake_.wait_for(lock, std::chrono::milliseconds(90),
                                    [&] { return pending_.has_value() || cancelled(); }))
                     continue;
             }

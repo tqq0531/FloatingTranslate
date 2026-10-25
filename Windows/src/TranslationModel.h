@@ -71,8 +71,9 @@ class TranslationModel {
         Ort::SessionOptions options;
         options.SetIntraOpNumThreads(2);
         options.SetInterOpNumThreads(1);
-        options.DisableMemPattern();
-        options.DisableCpuMemArena();
+        // Reuse decoder allocations across tokens and consecutive sentences.
+        options.EnableMemPattern();
+        options.EnableCpuMemArena();
         Ort::ThrowOnError(api->RegisterCustomOpsLibrary_V2(options, extension.c_str()));
         tokenizer_ = Ort::Session(env_, (base / "tokenizer.onnx").c_str(), options);
         encoder_ = Ort::Session(env_, (base / "encoder_model_quantized.onnx").c_str(), options);

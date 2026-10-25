@@ -42,7 +42,7 @@ class Pinyin {
         traits.user_data_dir = user.c_str();
         traits.distribution_name = "FloatingTranslate";
         traits.distribution_code_name = "fuyi";
-        traits.distribution_version = "0.1.9";
+        traits.distribution_version = "0.1.10";
         traits.app_name = "rime.fuyi";
         traits.min_log_level = 3;
         traits.log_dir = "";
@@ -57,7 +57,7 @@ class Pinyin {
         api_->set_option(session_, "_no_learning", true);
         return true;
     }
-    std::vector<Candidate> query(const std::string &raw) {
+    std::vector<Candidate> query(const std::string &raw, bool lazy = false, size_t limit = 100) {
         std::lock_guard lock(mutex_);
         std::vector<Candidate> out;
         if (!session_ || raw.empty() || raw.size() > 100)
@@ -65,47 +65,51 @@ class Pinyin {
         input(raw);
         RimeCandidateListIterator iterator{};
         if (!api_->candidate_list_begin(session_, &iterator)) return out;
-        while (out.size() < 100 && api_->candidate_list_next(&iterator)) {
+        while (out.size() < limit && api_->candidate_list_next(&iterator)) {
             auto text = wide(iterator.candidate.text ? iterator.candidate.text : "");
             if (!text.empty() && std::none_of(text.begin(), text.end(), [](wchar_t ch) {
                     return (ch >= L'a' && ch <= L'z') || (ch >= L'A' && ch <= L'Z');
                 }))
-                out.push_back({text, (size_t)iterator.index});
+                out.push_back({text, 0, (size_t)iterator.index});
             if (iterator.index >= 199) break; // Bound work even when candidates are filtered.
         }
         api_->candidate_list_end(&iterator);
-        for (auto &candidate : out) {
-            size_t index = candidate.consumed;
-            input(raw);
-            if (!api_->select_candidate(session_, index)) {
-                candidate.consumed = 0;
-                continue;
-            }
-            RIME_STRUCT(RimeContext, selected);
-            int tail = 0;
-            if (api_->get_context(session_, &selected)) {
-                auto text = wide(selected.composition.preedit ? selected.composition.preedit : "");
-                for (wchar_t ch : text)
-                    if ((ch >= L'a' && ch <= L'z') || (ch >= L'A' && ch <= L'Z') || ch == L'ü')
-                        tail++;
-                api_->free_context(&selected);
-            }
-            size_t pos = raw.size();
-            while (pos > 0 && tail > 0) {
-                --pos;
-                if (raw[pos] >= 'a' && raw[pos] <= 'z')
-                    --tail;
-            }
-            while (pos < raw.size() && raw[pos] == '\'')
-                ++pos;
-            candidate.consumed = pos;
-        }
+        if (!lazy) for (auto &candidate : out) resolve(raw, candidate);
+        if (!lazy) out.erase(std::remove_if(out.begin(), out.end(), [&](const Candidate &candidate) {
+            return !candidate.consumed || candidate.consumed > raw.size();
+        }), out.end());
         api_->clear_composition(session_);
-        out.erase(std::remove_if(out.begin(), out.end(),
-                                 [&](const Candidate &x) { return !x.consumed || x.consumed > raw.size(); }),
-                  out.end());
-        personal_.rank(raw, out);
+        personal_.rank(raw, out, [&](Candidate &candidate) { resolve(raw, candidate); });
         return out;
+    }
+    void resolve(const std::string &raw, Candidate &candidate) {
+        std::lock_guard lock(mutex_);
+        if (candidate.consumed || !session_) return;
+        input(raw);
+        if (!api_->select_candidate(session_, candidate.rimeIndex)) {
+            candidate.consumed = 0;
+            api_->clear_composition(session_);
+            return;
+        }
+        RIME_STRUCT(RimeContext, selected);
+        int tail = 0;
+        if (api_->get_context(session_, &selected)) {
+            auto text = wide(selected.composition.preedit ? selected.composition.preedit : "");
+            for (wchar_t ch : text)
+                if ((ch >= L'a' && ch <= L'z') || (ch >= L'A' && ch <= L'Z') || ch == L'ü')
+                    tail++;
+            api_->free_context(&selected);
+        }
+        size_t pos = raw.size();
+        while (pos > 0 && tail > 0) {
+            --pos;
+            if (raw[pos] >= 'a' && raw[pos] <= 'z')
+                --tail;
+        }
+        while (pos < raw.size() && raw[pos] == '\'')
+            ++pos;
+        candidate.consumed = pos;
+        api_->clear_composition(session_);
     }
     void remember(const std::string &raw, const Candidate &candidate) {
         std::lock_guard lock(mutex_);
@@ -114,9 +118,11 @@ class Pinyin {
     std::optional<std::wstring> preview(std::string raw) {
         std::wstring result;
         while (!raw.empty()) {
-            auto list = query(raw);
+            auto list = query(raw, true);
             if (list.empty())
                 return {};
+            resolve(raw, list[0]);
+            if (!list[0].consumed) return {};
             result += list[0].text;
             raw.erase(0, list[0].consumed);
         }

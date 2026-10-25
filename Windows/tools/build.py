@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import os,pathlib,subprocess,hashlib,zipfile,json
+import os,pathlib,subprocess,hashlib,zipfile,json,sys
 ROOT=pathlib.Path(__file__).resolve().parents[1];BUILD=pathlib.Path(os.environ.get('FUYI_WINDOWS_BUILD_DIR',ROOT/'build'));OUT=BUILD/'FloatingTranslate-Windows-x64'
 TOOL=pathlib.Path(os.environ['LLVM_MINGW'])/'bin';CXX=TOOL/'x86_64-w64-mingw32-clang++';RC=TOOL/'x86_64-w64-mingw32-windres'
 def run(args,**kwargs):print(' '.join(str(x) for x in args),flush=True);subprocess.run([str(x) for x in args],check=True,**kwargs)
@@ -21,10 +21,16 @@ run(common+[ROOT/'src/TextService.cpp',ROOT/'src/Registration.cpp',ROOT/'src/Inp
 run(common+[ROOT/'src/Settings.cpp',BUILD/'app.res','-municode','-mwindows','-o',OUT/'FuyiSettings.exe']+libs)
 run(common+[ROOT/'src/Check.cpp',BUILD/'app.res','-municode','-o',OUT/'FuyiCheck.exe']+libs)
 run(common+[ROOT/'tests/core_test.cpp','-o',OUT/'FuyiCoreTest.exe'])
+if '--test' in sys.argv:
+ if sys.platform!='win32':raise RuntimeError('--test requires a Windows host')
+ run(common+[ROOT/'tests/runtime_regression.cpp','-municode','-o',BUILD/'runtime_regression.exe']+libs)
+ run([OUT/'FuyiCoreTest.exe'])
+ run([OUT/'FuyiCheck.exe'])
+ run([BUILD/'runtime_regression.exe',OUT/'FuyiIME.dll'])
 # Checksums of every delivered file; no last-minute downloads on the user's PC.
 files=sorted(p for p in OUT.rglob('*') if p.is_file() and p.name!='SHA256SUMS.txt')
-(OUT/'SHA256SUMS.txt').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.relative_to(OUT).as_posix()+'\n' for p in files))
-zip_path=BUILD/'FloatingTranslate-Windows-0.1.9-x64-offline.zip'
+(OUT/'SHA256SUMS.txt').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.relative_to(OUT).as_posix()+'\n' for p in files),encoding='utf-8')
+zip_path=BUILD/'FloatingTranslate-Windows-0.1.10-x64-offline.zip'
 with zipfile.ZipFile(zip_path,'w',zipfile.ZIP_DEFLATED,compresslevel=6) as z:
  for p in sorted(OUT.rglob('*')):
   if p.is_file():z.write(p,'FloatingTranslate/'+p.relative_to(OUT).as_posix())

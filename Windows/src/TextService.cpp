@@ -214,6 +214,7 @@ class TextService : public ITfTextInputProcessorEx,
     }
     ShiftTap shift_;
     Sentence sentence_;
+    size_t insertionOffset_ = 0;
     std::string raw_;
     std::vector<std::pair<std::string, std::wstring>> selectionUndo_;
     std::wstring locked_, english_, translatedSource_, requestedSource_, status_, correction_, advice_;
@@ -341,6 +342,7 @@ class TextService : public ITfTextInputProcessorEx,
         candidates_.clear();
         selected_ = 0;
         sentence_.clear();
+        insertionOffset_ = 0;
         release(sentenceRange_);
         status_.clear();
         if (panel_)
@@ -490,6 +492,17 @@ class TextService : public ITfTextInputProcessorEx,
             release(prefix); return RangeEvidence::Unknown;
         }
         if (composition_ && SUCCEEDED(composition_->GetRange(&current))) {
+            if (insertionOffset_ < sentence_.text.size()) {
+                auto before = prefix->ShiftEndToRange(ec, current, TF_ANCHOR_START);
+                auto result = SUCCEEDED(before) ? rangeTextEvidence(ec, prefix, sentence_.text.substr(0, insertionOffset_)) : RangeEvidence::Unknown;
+                ITfRange *tail = nullptr;
+                if (result == RangeEvidence::Matches && SUCCEEDED(sentenceRange_->Clone(&tail))) {
+                    result = SUCCEEDED(tail->ShiftStartToRange(ec, current, TF_ANCHOR_END))
+                        ? rangeTextEvidence(ec, tail, sentence_.text.substr(insertionOffset_)) : RangeEvidence::Unknown;
+                } else if (result == RangeEvidence::Matches) result = RangeEvidence::Unknown;
+                release(tail); release(current); release(prefix);
+                return result;
+            }
             LONG diff = 0;
             if (FAILED(prefix->CompareEnd(ec, current, TF_ANCHOR_START, &diff))) {
                 release(current); release(prefix); return RangeEvidence::Unknown;
@@ -507,6 +520,40 @@ class TextService : public ITfTextInputProcessorEx,
         auto result = rangeTextEvidence(ec, prefix, sentence_.text);
         release(prefix);
         return result;
+    }
+    // Re-read only the range this service committed in this input context.
+    // A caret outside it or a selection ends tracking; unavailable ranges only
+    // disable replacement until the host provides reliable evidence again.
+    RangeEvidence syncSentence(TfEditCookie ec) {
+        if (composition_ || !sentenceRange_) return RangeEvidence::Unknown;
+        TF_SELECTION sel{}; ULONG count = 0;
+        if (FAILED(context_->GetSelection(ec, TF_DEFAULT_SELECTION, 1, &sel, &count)) || !count || !sel.range)
+            return RangeEvidence::Unknown;
+        BOOL empty = FALSE; LONG start = 1, end = -1;
+        if (FAILED(sel.range->IsEmpty(ec, &empty)) ||
+            FAILED(sel.range->CompareStart(ec, sentenceRange_, TF_ANCHOR_START, &start)) ||
+            FAILED(sel.range->CompareEnd(ec, sentenceRange_, TF_ANCHOR_END, &end))) {
+            sel.range->Release(); return RangeEvidence::Unknown;
+        }
+        if (!empty || start < 0 || end > 0) {
+            sel.range->Release(); return RangeEvidence::Different;
+        }
+        ITfRange *prefix = nullptr;
+        wchar_t text[1001], left[1001]; ULONG length = 0, offset = 0;
+        bool valid = SUCCEEDED(sentenceRange_->GetText(ec, 0, text, 1001, &length)) &&
+            SUCCEEDED(sentenceRange_->Clone(&prefix)) &&
+            SUCCEEDED(prefix->ShiftEndToRange(ec, sel.range, TF_ANCHOR_START)) &&
+            SUCCEEDED(prefix->GetText(ec, 0, left, 1001, &offset)) && offset <= length;
+        release(prefix); sel.range->Release();
+        if (!valid) return RangeEvidence::Unknown;
+        if (length > 1000 || std::wstring(text, length).find_first_of(L"\r\n") != std::wstring::npos)
+            return RangeEvidence::Different;
+        bool finished = sentence_.finished && offset == length && sentence_.text == std::wstring(text, length);
+        sentence_.text.assign(text, length);
+        insertionOffset_ = offset;
+        sentence_.touched = GetTickCount64();
+        sentence_.finished = finished;
+        return RangeEvidence::Matches;
     }
     HRESULT ensureComposition(TfEditCookie ec) {
         if (composition_)
@@ -616,6 +663,9 @@ class TextService : public ITfTextInputProcessorEx,
         if (selected_ >= candidates_.size())
             return {};
         auto chosen = candidates_[selected_];
+        pinyin().resolve(raw_, chosen);
+        if (!chosen.consumed) return {};
+        candidates_[selected_] = chosen;
         auto tail = pinyin().preview(raw_.substr(chosen.consumed));
         if (!tail)
             return {};
@@ -623,7 +673,7 @@ class TextService : public ITfTextInputProcessorEx,
     }
     std::wstring source() {
         auto part = fragment();
-        return sentence_.text + (part ? *part : L"");
+        return insertedSentence(sentence_.text, insertionOffset_, part ? *part : L"");
     }
     void translate() {
         auto value = source();
@@ -706,7 +756,7 @@ class TextService : public ITfTextInputProcessorEx,
                      options_.above, options_.direct, correction_, advice_);
     }
     HRESULT refresh(TfEditCookie ec) {
-        candidates_ = pinyin().query(raw_);
+        candidates_ = pinyin().query(raw_, true);
         if (selected_ >= candidates_.size())
             selected_ = 0;
         auto hr = marked(ec);
@@ -737,7 +787,11 @@ class TextService : public ITfTextInputProcessorEx,
         bool hadPrefix = !sentence_.text.empty();
         if (sentenceRange_) {
             LONG diff = 0;
-            if (SUCCEEDED(sentenceRange_->CompareEnd(ec, range, TF_ANCHOR_START, &diff)) && diff == 0) {
+            if (insertionOffset_ < sentence_.text.size()) {
+                // Inserting inside the owned sentence already expands its range.
+                if (insertionOffset_ == 0 && FAILED(sentenceRange_->ShiftStartToRange(ec, range, TF_ANCHOR_START)))
+                    release(sentenceRange_);
+            } else if (SUCCEEDED(sentenceRange_->CompareEnd(ec, range, TF_ANCHOR_START, &diff)) && diff == 0) {
                 if (FAILED(sentenceRange_->ShiftEndToRange(ec, range, TF_ANCHOR_END)))
                     release(sentenceRange_);
             } else release(sentenceRange_);
@@ -747,7 +801,9 @@ class TextService : public ITfTextInputProcessorEx,
         if (sentenceRange_)
             sentenceRange_->SetGravity(ec, TF_GRAVITY_FORWARD, TF_GRAVITY_BACKWARD);
         range->Release();
-        sentence_.append(text, GetTickCount64());
+        auto combined = insertedSentence(sentence_.text, insertionOffset_, text);
+        insertionOffset_ += text.size();
+        sentence_.clear(); sentence_.append(combined, GetTickCount64());
         raw_.clear();
         locked_.clear(); selectionUndo_.clear();
         candidates_.clear();
@@ -774,7 +830,8 @@ class TextService : public ITfTextInputProcessorEx,
             LONG diff = 1;
             if (prefixEvidence(ec) != RangeEvidence::Matches || !sentenceRange_ || !composition_ ||
                 FAILED(composition_->GetRange(&compositionRange)) ||
-                FAILED(sentenceRange_->CompareEnd(ec, compositionRange, TF_ANCHOR_START, &diff)) || diff ||
+                (insertionOffset_ >= sentence_.text.size() &&
+                 (FAILED(sentenceRange_->CompareEnd(ec, compositionRange, TF_ANCHOR_START, &diff)) || diff)) ||
                 !selectionAtEnd(ec, compositionRange) || FAILED(sentenceRange_->Clone(&span))) {
                 release(compositionRange);
                 release(span);
@@ -782,7 +839,8 @@ class TextService : public ITfTextInputProcessorEx,
                 draw();
                 return;
             }
-            if (FAILED(span->ShiftEndToRange(ec, compositionRange, TF_ANCHOR_END))) {
+            if ((insertionOffset_ >= sentence_.text.size() && FAILED(span->ShiftEndToRange(ec, compositionRange, TF_ANCHOR_END))) ||
+                (insertionOffset_ == 0 && FAILED(span->ShiftStartToRange(ec, compositionRange, TF_ANCHOR_START)))) {
                 release(compositionRange);
                 release(span);
                 status_ = L"无法安全替换整句，请复制译文或纠错建议";
@@ -801,14 +859,14 @@ class TextService : public ITfTextInputProcessorEx,
                 composition->Release();
                 selectEnd(ec, span);
                 clear();
-                if(keepEnglishSource){sentence_.append(output,GetTickCount64());span->Clone(&sentenceRange_);if(sentenceRange_)sentenceRange_->SetGravity(ec,TF_GRAVITY_FORWARD,TF_GRAVITY_BACKWARD);translate();geometry(ec);}
+                if(keepEnglishSource){sentence_.append(output,GetTickCount64());insertionOffset_=output.size();span->Clone(&sentenceRange_);if(sentenceRange_)sentenceRange_->SetGravity(ec,TF_GRAVITY_FORWARD,TF_GRAVITY_BACKWARD);translate();geometry(ec);}
             }
             span->Release();
         } else {
             auto range = commitText(ec, english_);
             if (range) {
                 clear();
-                if(keepEnglishSource){sentence_.append(output,GetTickCount64());range->Clone(&sentenceRange_);if(sentenceRange_)sentenceRange_->SetGravity(ec,TF_GRAVITY_FORWARD,TF_GRAVITY_BACKWARD);translate();geometry(ec);}
+                if(keepEnglishSource){sentence_.append(output,GetTickCount64());insertionOffset_=output.size();range->Clone(&sentenceRange_);if(sentenceRange_)sentenceRange_->SetGravity(ec,TF_GRAVITY_FORWARD,TF_GRAVITY_BACKWARD);translate();geometry(ec);}
                 range->Release();
             }
         }
@@ -817,6 +875,8 @@ class TextService : public ITfTextInputProcessorEx,
         if (index >= candidates_.size())
             return;
         auto chosen = candidates_[index];
+        pinyin().resolve(raw_, chosen);
+        if (!chosen.consumed) return;
         pinyin().remember(raw_, chosen);
         selectionUndo_.push_back({raw_.substr(0, chosen.consumed), locked_});
         locked_ += chosen.text;
@@ -833,9 +893,8 @@ class TextService : public ITfTextInputProcessorEx,
                (key >= VK_NUMPAD0 && key <= VK_DIVIDE);
     }
     bool englishKey(TfEditCookie ec, WPARAM code) {
-        if (!composing() && !sentence_.text.empty() &&
-            (sentence_.finished || sentence_.expired(GetTickCount64()) || prefixEvidence(ec) == RangeEvidence::Different ||
-             selectionEvidence(ec, sentenceRange_) == RangeEvidence::Different)) clear();
+        if (!composing() && !sentence_.text.empty() && syncSentence(ec) == RangeEvidence::Different) clear();
+        if (!composing() && sentence_.finished && insertionOffset_ >= sentence_.text.size() && printableEnglishKey(code)) clear();
         if (code == VK_ESCAPE) {
             if (!composing()) return false;
             literal(ec); clear(); return true; // Cancel translation, keep typed English.
@@ -850,10 +909,7 @@ class TextService : public ITfTextInputProcessorEx,
         }
         if (code == VK_BACK) {
             if (locked_.empty()) {
-                if (!sentence_.text.empty()) {
-                    sentence_.backspace(GetTickCount64()); expectEdit_ = true;
-                    translate(); geometry(ec);
-                }
+                // Let the host delete once; OnEndEdit refreshes our owned range.
                 return false;
             }
             eraseLast(locked_);
@@ -866,6 +922,8 @@ class TextService : public ITfTextInputProcessorEx,
         }
         if (!printableEnglishKey(code)) {
             if (code == VK_CAPITAL) return false;
+            if (!composing() && code >= VK_LEFT && code <= VK_DOWN) return false;
+            if (!composing() && (code == VK_HOME || code == VK_END || code == VK_DELETE)) return false;
             literal(ec); clear(); return false;
         }
         BYTE state[256]{}; wchar_t text[8]{};
@@ -937,8 +995,7 @@ class TextService : public ITfTextInputProcessorEx,
             sentence_.clear();
             release(sentenceRange_);
         }
-        if (!composing() && !sentence_.text.empty() && sentenceRange_ &&
-            selectionEvidence(ec, sentenceRange_) == RangeEvidence::Different) {
+        if (!composing() && !sentence_.text.empty() && sentenceRange_ && syncSentence(ec) == RangeEvidence::Different) {
             clear();
         }
         sentence_.touched = GetTickCount64();
@@ -953,23 +1010,9 @@ class TextService : public ITfTextInputProcessorEx,
             return true;
         }
         if (code == VK_BACK) {
-            if (!selectionUndo_.empty()) {
-                auto previous = std::move(selectionUndo_.back()); selectionUndo_.pop_back();
-                raw_ = previous.first + raw_; locked_ = std::move(previous.second);
-                selected_ = 0; refresh(ec); return true;
-            }
-            if (!raw_.empty())
-                raw_.pop_back();
-            else if (!locked_.empty())
-                eraseLast(locked_);
-            else if (!sentence_.text.empty()) {
-                sentence_.backspace(GetTickCount64());
-                expectEdit_ = true;
-                translate();
-                geometry(ec);
+            if (!backspacePinyin(raw_, locked_, selectionUndo_))
                 return false;
-            } else
-                return false;
+            selected_ = 0;
             if (!composing()) {
                 auto range = commitText(ec, L"");
                 release(range);
@@ -1014,12 +1057,12 @@ class TextService : public ITfTextInputProcessorEx,
             return true;
         }
         if ((code >= VK_LEFT && code <= VK_DOWN) || code == VK_PRIOR || code == VK_NEXT || code == VK_HOME ||
-            code == VK_END) {
+            code == VK_END || code == VK_DELETE) {
             if (raw_.empty()) {
-                literal(ec);
-                clear();
+                if (composing()) { literal(ec); clear(); }
                 return false;
             }
+            if (code == VK_DELETE) return false;
             int movement = code == VK_LEFT || code == VK_UP ? -1
                            : code == VK_PRIOR               ? -5
                            : code == VK_NEXT                ? 5
@@ -1045,11 +1088,11 @@ class TextService : public ITfTextInputProcessorEx,
                 MessageBeep(MB_OK);
                 return true;
             }
-            if (sentence_.finished) {
+            if (sentence_.finished && insertionOffset_ >= sentence_.text.size()) {
                 sentence_.clear();
                 release(sentenceRange_);
             }
-            sentence_.begin(GetTickCount64());
+            sentence_.touched = GetTickCount64();
             raw_ += (char)(code - 'A' + 'a');
             selected_ = 0;
             refresh(ec);
@@ -1185,7 +1228,7 @@ class TextService : public ITfTextInputProcessorEx,
                         if(prefixEvidence(ec)!=RangeEvidence::Matches || !selectionAtEnd(ec,sentenceRange_))return S_OK;
                         if(SUCCEEDED(sentenceRange_->SetText(ec,0,correction.c_str(),(LONG)correction.size()))) {
                             wroteText_=true;expectEdit_=true;selectEnd(ec,sentenceRange_);
-                            sentence_.text=correction;sentence_.touched=GetTickCount64();
+                            sentence_.text=correction;insertionOffset_=correction.size();sentence_.touched=GetTickCount64();
                             sentence_.finished=!correction.empty()&&std::wstring(L".!?\n").find(correction.back())!=std::wstring::npos;
                             translate();geometry(ec);
                         }
@@ -1422,11 +1465,16 @@ class TextService : public ITfTextInputProcessorEx,
             if (retained) {
                 bool prefix = !sentence_.text.empty();
                 LONG diff=1;
-                if (sentenceRange_ && SUCCEEDED(sentenceRange_->CompareEnd(ec,range,TF_ANCHOR_START,&diff)) && diff==0)
+                if (sentenceRange_ && insertionOffset_ < sentence_.text.size()) {
+                    if (insertionOffset_ == 0 && FAILED(sentenceRange_->ShiftStartToRange(ec, range, TF_ANCHOR_START)))
+                        release(sentenceRange_);
+                } else if (sentenceRange_ && SUCCEEDED(sentenceRange_->CompareEnd(ec,range,TF_ANCHOR_START,&diff)) && diff==0)
                     {if(FAILED(sentenceRange_->ShiftEndToRange(ec,range,TF_ANCHOR_END)))release(sentenceRange_);}
                 else { release(sentenceRange_); if(!prefix)range->Clone(&sentenceRange_); }
                 if(sentenceRange_)sentenceRange_->SetGravity(ec,TF_GRAVITY_FORWARD,TF_GRAVITY_BACKWARD);
-                sentence_.append(text,GetTickCount64());
+                auto combined = insertedSentence(sentence_.text, insertionOffset_, text);
+                insertionOffset_ += text.size();
+                sentence_.clear(); sentence_.append(combined, GetTickCount64());
                 release(composition_);raw_.clear();locked_.clear(); selectionUndo_.clear();candidates_.clear();selected_=0;
                 translate(); geometry(ec);
             } else { release(composition_); clear(); }
@@ -1456,6 +1504,12 @@ class TextService : public ITfTextInputProcessorEx,
                 ranges->Release();
             }
             if (ownEditDepth_) return S_OK;
+            if (!composition_ && sentenceRange_) {
+                auto evidence = syncSentence(ec);
+                if (evidence == RangeEvidence::Different) { clear(); return S_OK; }
+                if (evidence == RangeEvidence::Unknown && changed) release(sentenceRange_);
+                translate(); geometry(ec); return S_OK;
+            }
             // Hosts may send several text/selection notifications for one IME
             // write. Validate our bounded range instead of clearing on the second.
             auto prefix = prefixEvidence(ec);

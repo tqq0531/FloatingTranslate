@@ -4,6 +4,7 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include <utility>
 namespace fuyi {
 // Each direction keeps an independent default; Tab requests the opposite.
 inline bool translationOnCommit(bool englishInput, bool pinyinToEnglish,
@@ -14,7 +15,13 @@ inline bool translationOnCommit(bool englishInput, bool pinyinToEnglish,
 struct Candidate {
     std::wstring text;
     size_t consumed = 0;
+    size_t rimeIndex = 0;
 };
+inline std::wstring insertedSentence(const std::wstring &sentence, size_t offset,
+                                     const std::wstring &part) {
+    offset = std::min(offset, sentence.size());
+    return sentence.substr(0, offset) + part + sentence.substr(offset);
+}
 // An unavailable TSF range is not evidence that the user moved the caret.
 enum class RangeEvidence { Unknown, Matches, Different };
 inline bool retainEnglishPrefix(bool englishInput, bool blocked, RangeEvidence text,
@@ -108,5 +115,16 @@ inline void eraseLast(std::wstring &value) {
     value.pop_back();
     if (!value.empty() && value.back() >= 0xd800 && value.back() <= 0xdbff)
         value.pop_back();
+}
+inline bool backspacePinyin(std::string &raw, std::wstring &locked,
+                           std::vector<std::pair<std::string, std::wstring>> &undo) {
+    if (!raw.empty()) raw.pop_back();
+    else if (!undo.empty()) {
+        raw = std::move(undo.back().first);
+        locked = std::move(undo.back().second);
+        undo.pop_back();
+    } else if (!locked.empty()) eraseLast(locked);
+    else return false;
+    return true;
 }
 } // namespace fuyi

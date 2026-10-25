@@ -65,7 +65,8 @@ class PersonalDictionary {
             throw std::runtime_error("Cannot save candidate counts");
     }
   public:
-    void rank(const std::string &raw, std::vector<Candidate> &candidates) {
+    void rank(const std::string &raw, std::vector<Candidate> &candidates,
+              const std::function<void(Candidate &)> &resolve = {}) {
         auto options = Options::read();
         if (!options.remember || options.privacy) return;
         try {
@@ -75,10 +76,10 @@ class PersonalDictionary {
                 if (!cacheLoaded_ || time != cacheTime_) {
                     cached_ = load(file); cacheTime_ = time; cacheLoaded_ = true;
                 }
-                cached_.rank(raw, candidates); return;
+                cached_.rank(raw, candidates, resolve); return;
             }
         } catch (...) {}
-        session_.rank(raw, candidates);
+        session_.rank(raw, candidates, resolve);
     }
     void remember(const std::string &raw, const Candidate &candidate) {
         if (!candidate.consumed || candidate.consumed > raw.size() ||

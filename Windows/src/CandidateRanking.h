@@ -1,6 +1,7 @@
 #pragma once
 #include "Core.h"
 #include <map>
+#include <functional>
 namespace fuyi {
 struct CandidateUse {
     std::string pinyin;
@@ -37,9 +38,15 @@ class CandidateRanking {
         for (const auto &[key, count] : counts_) out.push_back({key.first, key.second, count});
         return out;
     }
-    void rank(const std::string &raw, std::vector<Candidate> &candidates) const {
+    void rank(const std::string &raw, std::vector<Candidate> &candidates,
+              const std::function<void(Candidate &)> &resolve = {}) const {
+        if (resolve) for (auto &candidate : candidates) {
+            if (candidate.consumed) continue;
+            for (const auto &[key, count] : counts_)
+                if (key.second == candidate.text && raw.rfind(key.first, 0) == 0) { resolve(candidate); break; }
+        }
         size_t longest = 0;
-        for (const auto &c : candidates) longest = std::max(longest, c.consumed);
+        for (const auto &c : candidates) longest = std::max(longest, c.consumed ? c.consumed : raw.size());
         auto score = [&](const Candidate &candidate) -> uint32_t {
             // A favourite prefix must not displace a complete phrase/sentence.
             if (candidate.consumed != longest || candidate.consumed > raw.size()) return 0;

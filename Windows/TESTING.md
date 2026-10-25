@@ -1,4 +1,16 @@
-# Windows 0.1.7 测试边界与验收清单
+# Windows 0.1.10 测试边界与验收清单
+
+## 2026-10-25 Windows 本机验证
+
+- 在 Windows x64 使用固定 LLVM-MinGW 20261006 工具链原生构建；运行 FuyiCoreTest、FuyiCheck 和 tests/runtime_regression.cpp。
+- 核心回归覆盖句首/句中/句尾插入及英文插词、快输后先删除尾部拼音再撤回选词、已提交文字交还宿主删除、延迟候选选词记忆排序和分页。
+- 对 nihao、nh、zhogn、xi'an、nihoa 以及两个长拼音，逐项对比所有候选文本和消耗长度，延迟计算与完整计算一致；真实中英双向推理、取消和模型校验通过。
+- 同机固定两组逐字符拼音输入（不含 UI/模型推理）：完整计算约 942.6 ms，按需计算约 41.9 ms。模型首次短句约 1065 ms，加载后两个例句约 600/641 ms；这是固定样例结果，不代表所有电脑或长句的延迟。
+- 原生电脑控制能读取记事本焦点，但截图报 FrameArrived timeout，点击报 coordinate input geometry is unavailable。未将这些自动测试当作实际宿主交互及视觉验收。
+
+依赖准备好后，在 Windows 仓库根目录运行 `python Windows/tools/build.py --test` 可重现上述原生测试，再运行 `python Windows/tools/audit_package.py Windows/build/FloatingTranslate-Windows-0.1.10-x64-offline.zip` 审计发行包。测试只使用固定句子，不注册输入法、不读取用户文档。
+
+仍需交互复测：在记事本和微信输入“我去北京”，回到“我”后输入“今天”，应预览“我今天去北京”的整句译文；在句首、句末重复，并试 Backspace/Delete、选区和换框。开启默认译文输出时，检查中间插字后提交整句译文不会遗留原句尾部。快速输入拼音后退格逐字删除尾部拼音，再退回最近选词。100%、125%、150%、200% 缩放及跨屏检查外框、选中框、光标跟随、复制和长文本滚动。范围不可验证时应拒绝自动替换并提示复制。
 
 日期：2026-10-23。当前开发主机为 macOS / Apple Silicon，交叉编译 Windows x64。**尚未在真实 Windows 系统完成输入服务与宿主应用验收。** 此包供指定测试人员试用，不应按“与 Mac 一样成熟稳定”对外宣传。
 
