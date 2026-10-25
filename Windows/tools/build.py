@@ -43,7 +43,7 @@ for source,name in [('README.md','开发与隐私说明.md'),('TESTING.md','测�
 # Checksums of every delivered file; no last-minute downloads on the user's PC.
 files=sorted(p for p in OUT.rglob('*') if p.is_file() and p.name!='SHA256SUMS.txt')
 (OUT/'SHA256SUMS.txt').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.relative_to(OUT).as_posix()+'\n' for p in files),encoding='utf-8')
-zip_path=BUILD/'FloatingTranslate-Windows-0.1.18-x64-offline.zip'
+zip_path=BUILD/'FloatingTranslate-Windows-0.1.19-x64-offline.zip'
 with zipfile.ZipFile(zip_path,'w',zipfile.ZIP_DEFLATED,compresslevel=6) as z:
  for p in sorted(OUT.rglob('*')):
   if p.is_file():z.write(p,'FloatingTranslate/'+p.relative_to(OUT).as_posix())

@@ -5,7 +5,7 @@
 #include <tlhelp32.h>
 #include <set>
 namespace fuyi {
-inline constexpr const wchar_t *runtimeVersion = L"0.1.18";
+inline constexpr const wchar_t *runtimeVersion = L"0.1.19";
 inline fs::path registeredRuntime() {
     HKEY key = nullptr;
     auto name = L"SOFTWARE\\Classes\\CLSID\\" + guidText(serviceId) + L"\\InprocServer32";
@@ -168,6 +168,6 @@ inline std::wstring maintainUserRuntime() {
         }
     }
     cleanRimeCaches();
-    return reopen.empty() ? L"0.1.18 · 已检查更新和过期临时缓存" : L"0.1.18 已安装，等待重启统一生效。\n仍用旧版：" + reopen + L"\n保存后点击“统一更新所有软件”。";
+    return reopen.empty() ? L"0.1.19 · 已检查更新和过期临时缓存" : L"0.1.19 已安装，等待重启统一生效。\n仍用旧版：" + reopen + L"\n保存后点击“统一更新所有软件”。";
 }
 } // namespace fuyi

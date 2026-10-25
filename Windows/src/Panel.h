@@ -213,8 +213,8 @@ class Panel {
                 Gdiplus::Pen pen(stroke, std::max(1.0f,scale_/96.0f)); g.DrawPath(&pen,&path);
             };
             RECT card{0,0,width_,height_};
-            rounded(card, d(16), Gdiplus::Color(40,70,73,82), Gdiplus::Color(20,31,34,42),
-                    Gdiplus::Color(110,210,217,232));
+            rounded(card, d(PanelStyle::cornerDiameter/2), Gdiplus::Color(40,70,73,82), Gdiplus::Color(20,31,34,42),
+                    Gdiplus::Color(85,210,217,232));
             Gdiplus::Font english(dc,font_), small(dc,small_), candidate(dc,candidateFont_);
             Gdiplus::StringFormat format(Gdiplus::StringFormat::GenericTypographic());
             format.SetFormatFlags(format.GetFormatFlags() | Gdiplus::StringFormatFlagsNoWrap |
@@ -249,8 +249,8 @@ class Panel {
             for(auto &choice:layout_.choices) {
                 auto r=choice.rect; RECT box{r.left,r.top-scroll_,r.right,r.bottom-scroll_};
                 bool selected=choice.index==selected_;
-                if(selected)rounded(box,d(18),Gdiplus::Color(255,42,144,255),Gdiplus::Color(255,10,111,239),Gdiplus::Color(255,100,183,255));
-                text(std::to_wstring(choice.index%5+1),small,r.left+d(7),r.top+d(11)-scroll_,
+                if(selected)rounded(box,d(13),Gdiplus::Color(255,42,144,255),Gdiplus::Color(255,10,111,239),Gdiplus::Color(255,100,183,255));
+                text(std::to_wstring(choice.index%5+1),small,r.left+d(7),r.top+d(8)-scroll_,
                      selected?Gdiplus::Color(255,240,248,255):Gdiplus::Color(255,157,168,185));
                 for(auto &line:choice.lines)
                     text(candidates_[choice.index].text.substr(line.start,line.length),candidate,line.rect.left,line.rect.top-scroll_,Gdiplus::Color(255,247,249,253));
@@ -342,7 +342,7 @@ class Panel {
             if (r.bottom < 0 || r.top >= height_) continue;
             bool active = choice.index == selected_;
             if (active) {
-                surface(back, r, d(32), RGB(40, 139, 255), RGB(10, 111, 237), RGB(82, 165, 255));
+                surface(back, r, d(26), RGB(40, 139, 255), RGB(10, 111, 237), RGB(82, 165, 255));
             }
             SetTextColor(back, active ? RGB(255, 255, 255) : RGB(228, 230, 235));
             SelectObject(back, small_);
@@ -538,7 +538,7 @@ class Panel {
         // the corners even in remote desktop compositors.
         // The shell must recognize this as an IME window. An ordinary tool
         // window created inside Search/AppContainer is shell-cloaked.
-        wc.style = CS_IME | CS_DROPSHADOW;
+        wc.style = CS_IME;
         RegisterClassW(&wc);
         CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST, wc.lpszClassName,
                         L"浮译", WS_POPUP, 0, 0, width_, height_, owner_, nullptr, module, this);

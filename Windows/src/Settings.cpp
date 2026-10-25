@@ -222,7 +222,7 @@ static LRESULT CALLBACK proc(HWND w, UINT message, WPARAM a, LPARAM b) {
         control(L"BUTTON", L"使用说明", BS_PUSHBUTTON, 34, 644, 160, 36, 4);
         control(L"BUTTON", L"隐私与开源许可", BS_PUSHBUTTON, 208, 644, 180, 36, 5);
         control(L"BUTTON", L"统一更新所有软件", BS_PUSHBUTTON, 402, 644, 160, 36, 7);
-        status = control(L"STATIC", L"0.1.18 · Windows x64 开发试用版", 0, 34, 694, 540, 66, 0);
+        status = control(L"STATIC", L"0.1.19 · Windows x64 开发试用版", 0, 34, 694, 540, 66, 0);
         return 0;
     }
     case WM_CTLCOLORSTATIC:
@@ -306,7 +306,7 @@ static LRESULT CALLBACK proc(HWND w, UINT message, WPARAM a, LPARAM b) {
             std::thread([w] {
                 auto result = std::make_unique<std::wstring>();
                 try { *result = maintainUserRuntime(); cleanOldRuntimes(); }
-                catch (...) { *result = L"0.1.18 · 部分缓存仍在使用，下次启动重试"; }
+                catch (...) { *result = L"0.1.19 · 部分缓存仍在使用，下次启动重试"; }
                 if (PostMessageW(w, WM_APP+3, 0, (LPARAM)result.get())) result.release();
             }).detach();
         }

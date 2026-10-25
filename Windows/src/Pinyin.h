@@ -42,7 +42,7 @@ class Pinyin {
         traits.user_data_dir = user.c_str();
         traits.distribution_name = "FloatingTranslate";
         traits.distribution_code_name = "fuyi";
-        traits.distribution_version = "0.1.18";
+        traits.distribution_version = "0.1.19";
         traits.app_name = "rime.fuyi";
         traits.min_log_level = 3;
         traits.log_dir = "";

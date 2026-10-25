@@ -28,7 +28,7 @@ int wmain(int argc,wchar_t** argv) {
             return 0;
         }
         if(argc>1 && std::wstring(argv[1])==L"--runtime-access") {
-            auto root=knownFolder(FOLDERID_ProgramFiles)/L"FloatingTranslate"/L"0.1.18";
+            auto root=knownFolder(FOLDERID_ProgramFiles)/L"FloatingTranslate"/L"0.1.19";
             bool passed=true;
             for(const auto &part:{L"FuyiIME.dll",L"librime.dll",L"RimeData/build/fuyi.schema.yaml",L"models/encoder_model_quantized.onnx",L"models/en-zh/encoder_model_quantized.onnx",L"Proofreading/en_50k.txt"}) {
                 bool ok=sandboxReadAcl(root/part,L"S-1-15-2-1")&&sandboxReadAcl(root/part,L"S-1-15-2-2");
