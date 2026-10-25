@@ -10,3 +10,9 @@ app/src/main/assets/translation/vocab.json
 app/src/main/assets/translation/sp-map.json
 
 .model-venv/
+
+# English-to-Chinese weights are generated from the pinned model source too.
+app/src/main/assets/translation-en-zh/*.onnx
+app/src/main/assets/translation-en-zh/source.spm
+app/src/main/assets/translation-en-zh/vocab.json
+app/src/main/assets/translation-en-zh/sp-map.json

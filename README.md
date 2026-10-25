@@ -1,5 +1,9 @@
 # 浮译 / FloatingTranslate
 
+本分支当前安卓开发版为 **0.1.6**：全新键盘、可调高度、系统深浅色主题、中英双向离线翻译与 24 小时复制历史。详见 [安卓使用说明](Android/README.md)。下表链接为此前已发布版本。
+
+This branch contains **Android 0.1.6**: a redesigned keyboard, adjustable height, system light/dark appearance, offline translation in both directions and 24-hour clipboard history. See the [Android guide](Android/README.md). The release links below refer to previously published packages.
+
 输入中文拼音时，实时显示当前整句的英文翻译，可选择默认输出中文或英文。支持分段输入后累积整句、中文 / English 切换和英文选中复制。
 
 A Pinyin input method that previews an English translation of the current sentence as you type. Choose Chinese or English output, build sentences across multiple committed phrases, switch input languages, and select or copy translations.

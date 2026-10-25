@@ -1,94 +1,84 @@
-# 浮译 Android · 0.1.4 内置离线模型试用版
+# 浮译 Android 0.1.6 / FloatingTranslate for Android
 
-原生安卓输入法，支持本地拼音候选、分段输入后的整句英文预览，以及保留 24 小时的文字剪贴板历史。
+轻量中英翻译键盘：中文拼音、英文输入、离线双向翻译，以及保留 24 小时的文字剪贴板。0.1.6 重新设计按键和布局，提供自定义高度及跟随系统的深浅色外观。
 
-## 安装和使用
+A focused bilingual keyboard with Pinyin, English typing, fully offline translation in both directions, and 24-hour text clipboard history. Version 0.1.6 redesigns the keyboard with adjustable height and system-aware light/dark appearance.
 
-1. 安装 APK，打开“浮译”。试用 APK 使用开发签名，尚未上架应用商店。
-2. 点击“启用键盘”，在系统设置启用；再点“切换输入法”。Android 会展示所有第三方键盘的标准风险提示。
-3. 在试用输入框输入 `nihao`，按空格确认“你好”。通过底部“中/英 / EN”按钮切换直接英文；`123` 打开数字符号。
-4. 中译英模型已打进 APK。首次打开自动从安装包解压、校验并加载，无需网络、Google 服务或另下语言包；设置页会显示实际解压百分比和 MB。键盘上方的整句英文可长按复制。若初始化失败，保留至少 500 MB 可用空间后在设置重试。
-5. 开启“复制历史”。在其他软件复制文字，回到任意普通文本框，点击键盘“剪贴板”，点某条历史即可插入；每条右侧“⋮”可以查看到期时间或删除，顶部“⋯”可以“清空”。关闭保存开关立即清空历史。
+## 安装与使用 / Install and use
 
-## 设置界面
+1. 安装完整 APK，打开“浮译”，点击“启用键盘”，再选择浮译。试用包使用开发签名。
+2. 底部“中/英 / EN”或顶部“中 → 英 / 英 → 中”切换输入语言及翻译方向。
+3. 中文输入拼音后点候选或空格确认；英文空格会保留在同一句中，继续输入会重新翻译完整句子。
+4. 点“用英文 / 用中文”将本次输入替换为译文，长按译文可复制。翻译未就绪时按钮不可用。操作键遵循宿主显示“发送、搜索、完成、换行”；正在组词时先确认，之后再执行发送等动作。
+5. 点击键盘“调节”，选择“跟随系统 / 浅色 / 深色”，拖动滑块改变高度。标准为 100%，约可调至 81%–126%，设置会保留；也可从应用设置调整。
+6. 开启“复制历史”，点键盘“历史”查看并插入以前复制的文字；记录保留 24 小时，可逐条删除或清空。
 
-0.1.3 重做设置页：深蓝引导区、白色卡片、统一按钮和开关，按输入偏好、本机翻译、试用和隐私分组。完整隐私说明可展开；网络边界与敏感输入建议直接展示。内置模型初始化成功后显示“已就绪”，提取模型时显示实际进度。
+Install the complete APK and enable/select FloatingTranslate in Android keyboard settings. The language key also changes translation direction. English spaces remain part of the current sentence. “用英文 / 用中文” replaces the current draft with its translation; long-press to copy. The action key confirms an active composition before sending/searching/inserting a line break according to the host app. “调节” provides persistent height and light/dark/system choices. “历史” opens clipboard entries for insertion or deletion.
 
-[设置首页](docs/settings-home.png) · [翻译、试用与隐私](docs/settings-details.png) · [窄屏与大字号](docs/settings-large-text.png)
+设置中的“中文输入，默认输出英文”控制拼音确认时的输出；“英文输入，默认输出中文”控制英文回车确认时的输出。英文空格始终用于继续写句子。替换只针对本次键盘维护、且与光标前原文完全一致的草稿；光标移动或宿主不提供该范围时不会删除正文，可长按复制译文。
 
-## 内置离线翻译
+The two independent output defaults apply when confirming Chinese or English composition. English spaces keep extending the sentence. Replacement is limited to the exact current draft immediately before the cursor; if the editor cannot verify that range, use copy instead.
 
-0.1.4 替换原 Google ML Kit 翻译组件，使用 OPUS-MT 中译英 int8 模型与 ONNX Runtime，在手机 CPU 上推理。模型约 110 MB，随 APK 一起安装；安装后没有模型下载步骤，国内网络无法访问 Google 不影响使用。旧版系统下载任务不会继续供新版使用，新版也不读取其模型缓存。
+## 新外观 / Appearance
 
-首次初始化从 APK 提取模型到本应用私有的 no-backup 目录，按清单逐个验证 SHA-256，并显示真实字节进度。到 100% 后仍需加载推理引擎，加载成功才显示“已就绪”。损坏或中断的文件会在下次初始化时重新校验、提取。卸载会删除提取文件，重装无需联网，重开设置可检查状态。
+白键浅灰底与石墨深色两套配色，用蓝紫色突出翻译和操作键。标准错位 QWERTY、宽空格、独立中英键，保留数字和符号；移除表情工具等额外入口。按键间隙仍属于触控范围，退格长按支持连续删除。Shift 只切换下一个字母的大写。
 
-当前只做**中文 → 英文**翻译；“中英文切换”指中文拼音与直接英文输入切换，不是双向机器翻译。输入最多 256 个模型子词，输出最多 128 个子词，超过时提示分句，不静默截断。只做本机贪心解码，翻译质量与旧版不同，专名、口语和长句可能不准；速度和内存占用需按实际手机验收。
+Neutral white keys and graphite dark surfaces use a restrained blue-violet accent. Staggered QWERTY rows, a wide space bar and a dedicated language key preserve familiar typing geometry. Numbers and symbols remain; extra emoji tools have been removed. Touch gutters remain active, Backspace repeats while held, and Shift capitalizes the next character.
 
-采用预编译的 ONNX Runtime Extensions 0.13.0，其中 tokenizer 库仍为 4 KB ELF 对齐。当前已验证设备为 4 KB 页系统；**尚不承诺 16 KB 页设备兼容，也不用于直接上架 Google Play**。后续需要重编译此依赖并在 16 KB 设备测试，不能只通过 APK zipalign 当作已经支持。
+[浅色键盘 / Light](docs/keyboard-light.png) · [深色键盘 / Dark](docs/keyboard-dark.png) · [高度和主题 / Appearance controls](docs/keyboard-adjust-dark.png) · [英译中 / English to Chinese](docs/keyboard-english-chinese.png)
 
-## 键盘布局与手感
+## 离线翻译 / Offline translation
 
-0.1.1 按常用手机键盘重新排布：灰底白键、第二排半键缩进，第三排两侧是 Shift 和退格，底部为数字符号、表情、逗号、宽空格、中英和绿色操作键。操作键根据输入框显示发送、搜索、完成或换行。
+中译英与英译中模型均随 APK 内置，手机无需联网、Google 服务或下载语言包。首次启动从 APK 解压并校验两个方向，设置页显示真实进度。模型文件总计约 232 MB，安装和提取需预留空间（建议至少 1 GB）。推理只保留当前方向的模型会话，切换方向需要重新加载。
 
-按键可见间隙属于触摸范围；按下有颜色反馈与系统轻震动（受设备设置控制），退格按住约 0.38 秒开始连续删除。Shift 切换下一字的大写，字母键默认用大写键帽显示，不代表实际输入大写。剪贴板采用整行白色卡片，保留原来的本地加密及 24 小时规则。
+Both models are bundled in the APK. First launch extracts and verifies them with progress; no network or Google services are required on the phone. Model assets total approximately 232 MB; allow at least 1 GB of free storage for installation and extraction. Only one direction is kept resident at a time.
 
-[键盘样式](docs/layout.png) · [剪贴板样式](docs/clipboard.png)
+OPUS-MT int8 模型通过 ONNX Runtime 在 CPU 上推理，使用 beam search 和重复 token 抑制。输入最多 256 个模型子词，输出最多 128 个子词，超过时提示分句；翻译仍可能出错，不提供语法纠正保证。运行时 APK 没有 `INTERNET` 权限，不调用云接口。
 
-## 历史记录的保留规则
+Quantized OPUS-MT runs on the CPU with beam decoding and repeated-token suppression. The model limit is 256 input subwords and 128 output subwords. Translation can be inaccurate; this is not a guaranteed grammar checker. The APK has no `INTERNET` permission or cloud fallback.
 
-- 从开启功能之后开始收集**文字**，无法还原开启之前的所有系统复制记录。剪贴板图片、文件和 URI 不导入。
-- 最多 100 条，每条不超过 10,000 个 UTF-16 字符；超限长文本会跳过，超过数量上限淘汰最旧的记录。
-- 每条从其复制时间起保留 24 小时。到期立即不再显示或允许插入。重复复制同样文字不延长已有记录的期限。
-- AES-GCM 加密保存到应用私有的 no-backup 目录；密钥由 Android Keystore 管理。没有云同步，不允许系统备份和设备迁移。
-- 程序重开后仍能读取未过期记录；打开应用、显示/选用历史和后台过期任务均会清理。Android 休眠、关机、强行停止可能推迟磁盘文件的物理清理，但再次访问会先按 24 小时规则过滤。
-- 只有浮译为当前默认输入法、系统允许访问且服务存活时才可能记录。切到其他键盘或被系统停止期间不保证收集；不是无间断的系统剪贴板审计工具。
-- 清空浮译历史不会改动系统当前剪贴板；操作系统自己的剪贴板保留规则独立生效。
+## 历史与隐私 / History and privacy
 
-## 密码和网络边界
+- 历史默认关闭，开启后仅收集文字，最多 100 条，每条最多 10,000 个 UTF-16 字符。不导入图片、文件或 URI。
+- 每条从复制时间起保存 24 小时；重复复制不延长已有记录期限。过期记录不可见、不可插入；休眠或关机可能推迟磁盘清理。
+- 使用 Android Keystore 和 AES-GCM 加密，存于应用私有 no-backup 目录。关闭开关即清空；清空浮译不会改动系统当前剪贴板。
+- 仅在系统允许默认输入法读取剪贴板时收集；切换其他输入法或服务被停止期间无法保证记录。
+- 密码框、不允许个性化学习的字段与带敏感标记的剪贴板会跳过。未正确标记的自定义敏感字段可能无法识别。
+- 输入正文、译文不写日志、不上传，不保存打字历史。只有显式开启的复制历史会持久保存。
 
-密码/可见密码/Web 密码/数字密码输入框，以及带“不允许个性化学习”标志的输入框，不翻译、不展示历史，跳过此时的复制。来源应用给剪贴板标记 `EXTRA_IS_SENSITIVE` 时也跳过。未正确标记的自定义密码框、未带敏感标记的口令仍可能无法识别；密码、验证码、密钥请切回系统键盘，不要保存到历史。
+Clipboard history is opt-in, text-only, encrypted locally, excluded from backup, and capped at 100 entries. Entries expire 24 hours after their original copy time; copying duplicates does not renew them. Expired entries cannot be inserted even if device sleep delays file cleanup. Disabling history clears it. Android may restrict clipboard access when this keyboard is not active. Password/sensitive fields and marked sensitive clips are excluded where detectable. Typed text and translations are neither logged nor uploaded.
 
-拼音使用同仓库的固定本地词库和 Java 词典实现；安卓首版没有集成 native Rime，因此候选排序、模糊拼音和个人词频能力与 Mac 版不同，也不会学习输入历史。支持全拼、部分首字母简拼和相邻字母对调纠错，不承诺任意错拼。
+## 开发与验证 / Development and verification
 
-**Android 0.1.4 内置版没有 `INTERNET` 权限，已移除 Google ML Kit、远程模型下载及其指标上报组件。** 中文和英文只经过 APK 内置模型处理，不发给 Google、国内云翻译 API 或开发者服务器。没有统计 SDK、云翻译后备接口或输入日志。运行时模型初始化和翻译均可断网完成。操作系统、商店和其他应用的联网行为不属于本应用控制范围；调试 APK 仅供试用，不代表系统或第三方键盘绝无风险。
+需要 JDK 17/21、Android SDK 36、Build Tools 36.1.0。开发机首次获取依赖及模型需要网络，安装完整 APK 的手机不需要。两个方向的权重不提交到 Git；准备脚本固定上游版本，构建会检查全部文件大小与 SHA-256。
 
-“拼音转换后默认输出英文”只在本次待确认内容能安全直接提交时生效。前面的词已按中文上屏后，长按复制整句英文；不自动删除并替换已上屏的历史正文。只累计本次通过浮译输入的当前句子，不扫描输入框前文；切换输入框、移动光标或超时会清理这段内存。
-
-## 开发
-
-使用 JDK 17/21、Android SDK 36、Build Tools 36.1.0。Gradle Wrapper 固定 8.13，AGP 固定 8.13.2，ONNX Runtime 1.23.2，Extensions 0.13.0。**开发电脑**首次拉取依赖和模型需要联网，手机用户安装完整 APK 后不需要。大型模型不提交进 Git；清单、导出脚本和许可随仓库提供，Gradle 会检查每个必需文件的大小和 SHA-256，缺失或不符即停止构建，不会生成缺模型的 APK。
+Development requires JDK 17/21 and Android SDK 36. Initial dependency/model preparation needs network access on the build machine only. Large weights are excluded from Git, pinned by the preparation script, and verified by Gradle before packaging.
 
 ```sh
 cd Android
 python3 -m venv .model-venv
 .model-venv/bin/pip install -r tools/requirements-translation.txt
 .model-venv/bin/python tools/prepare_translation.py
-# local.properties 填入本机 sdk.dir，或设置 ANDROID_HOME
 ./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
-# 在专用模拟器/测试机安装后，关闭 Wi-Fi 和移动网络再首次启动：
+# Run on a dedicated emulator/test device after selecting FloatingTranslate:
 ./gradlew :app:connectedDebugAndroidTest \
-  -Pandroid.testInstrumentationRunnerArguments.class=com.fuyi.keyboard.TranslationModelDeviceTest,com.fuyi.keyboard.DownloadProgressDeviceTest,com.fuyi.keyboard.ClipboardDeviceTest,com.fuyi.keyboard.KeyboardDeviceTest,com.fuyi.keyboard.SettingsDeviceTest \
+  -Pandroid.testInstrumentationRunnerArguments.class=com.fuyi.keyboard.KeyboardDeviceTest,com.fuyi.keyboard.SettingsDeviceTest,com.fuyi.keyboard.ClipboardDeviceTest \
   -Pandroid.testInstrumentationRunnerArguments.preparedModel=true
+# Run model validation separately from UI tests that initialize background sessions:
+./gradlew :app:connectedDebugAndroidTest \
+  -Pandroid.testInstrumentationRunnerArguments.class=com.fuyi.keyboard.TranslationModelDeviceTest
 ```
 
-APK：`app/build/outputs/apk/debug/app-debug.apk`。最低 Android 8.0 / API 26。包含 arm64-v8a、armeabi-v7a、x86_64、x86 推理库；实际验收范围见测试记录，不能将模拟器通过当作全部厂商手机通过。
+产物：`app/build/outputs/apk/debug/app-debug.apk`。最低 Android 8.0 / API 26。当前使用 ONNX Runtime Extensions 0.13.0，tokenizer 仍为 4 KB ELF 对齐；未保证 16 KB 内存页设备兼容，不用于直接上架 Google Play。模拟器通过不能代替各品牌真机验收。拼音使用本地 Java 词典，候选、模糊拼音与个人词频能力不等同于桌面 Rime。
 
-模型来源固定在 `Xenova/opus-mt-zh-en` 的 `39d480d52a9ea3065a1f117adfe4dbc55de10e6f`；基础模型为 Helsinki-NLP/opus-mt-zh-en。导出脚本生成原 SentencePiece 分词器的 ONNX 包装及词表映射，模型权重不改写。构建产物包含模型归属、修改说明、CC BY 4.0、运行时 MIT 许可及原模型卡，见 `app/src/main/assets/licenses/`。
+Output: `app/build/outputs/apk/debug/app-debug.apk`, Android 8.0/API 26+. The current tokenizer library is 4 KB ELF-aligned; 16 KB page devices are not guaranteed and this debug build is not intended for direct Play Store publication. Emulator validation does not cover every manufacturer. Pinyin uses a local Java dictionary rather than desktop Rime.
 
-单元测试覆盖真实词库、简拼、错拼、24 小时边界和真实字节进度。设备测试覆盖断网初始化/真实翻译、APK 无网络权限、英文复制与提交、分段整句、键盘手势和剪贴板安全规则。模型测试不再下载任何内容。
+测试记录见 [TESTING.md](TESTING.md)。/ See [test results](TESTING.md).
 
-验收详情和当前限制见 [测试记录](TESTING.md)。
+## 来源 / Credits
 
-## 参考和许可
-
-- [Android 默认输入法的剪贴板访问限制](https://developer.android.com/about/versions/10/privacy/changes#clipboard-data)
-- [敏感剪贴板标记](https://developer.android.com/develop/ui/views/touch-and-input/copy-paste#sensitive-content)
-- [OPUS-MT 基础模型与模型卡](https://huggingface.co/Helsinki-NLP/opus-mt-zh-en)（CC BY 4.0）和 [固定 ONNX 转换来源](https://huggingface.co/Xenova/opus-mt-zh-en/tree/39d480d52a9ea3065a1f117adfe4dbc55de10e6f)
-- [ONNX Runtime Java](https://onnxruntime.ai/docs/get-started/with-java.html) 与 [Extensions](https://onnxruntime.ai/docs/extensions/)（MIT）
-- 拼音词库来源与 Apache 2.0 许可见仓库 `Resources/RIME-LICENSE.txt`。各组件保持自己的许可证，不以本仓库许可覆盖。
-
-## 0.1.5 键盘外观 / Keyboard appearance
-雾白与墨青配色、青绿操作键和首选词高亮；调整圆角、字重与按键间距，保留错位 QWERTY 布局与完整触控区域。模型随 APK 内置，剪贴板历史仍只保留 24 小时。
-Mist-white keys, ink-teal labels and teal action/candidate accents with refined spacing and typography. Staggered QWERTY touch areas, bundled offline translation and 24-hour clipboard retention remain available.
-
-验证：Android 模拟器 5 项键盘测试通过（含退格长按、中英切换、剪贴板、发送键及密码框），单元测试和 debug APK 构建通过。
+- 布局操作参考 [搜狗官方使用说明](https://shouji.sogou.com/wap/htmls/instructions.php)，未使用其图标、皮肤或代码。/ Familiar interactions reference Sogou's documentation; no Sogou artwork or code is included.
+- 中译英：Helsinki-NLP / Xenova OPUS-MT zh-en，CC BY 4.0，固定 revision `39d480d52a9ea3065a1f117adfe4dbc55de10e6f`。
+- 英译中：Helsinki-NLP / Xenova OPUS-MT en-zh，Apache 2.0，固定 revision `046f55aec303cdee3e0318604406d4df20f1e8ea`。
+- ONNX Runtime 1.23.2 / Extensions 0.13.0，MIT。模型归属、许可和改动说明随 APK 保存在 `assets/licenses/`。
+- 拼音词库来源与 Apache 2.0 许可见 `Resources/RIME-LICENSE.txt`。

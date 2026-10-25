@@ -1,0 +1,31 @@
+{
+  "repository": "Xenova/opus-mt-en-zh",
+  "revision": "046f55aec303cdee3e0318604406d4df20f1e8ea",
+  "files": [
+    {
+      "file": "tokenizer.onnx",
+      "bytes": 1075569,
+      "sha256": "3fe371e5693571e87e147e813853cb81bfdb0d80611609cfb19a1119e50e788a"
+    },
+    {
+      "file": "sp-map.json",
+      "bytes": 186263,
+      "sha256": "c5aefb6b24b96103516fd35cd85cd5b292a7bdf6789546b779e14749e7fbe9bb"
+    },
+    {
+      "file": "vocab.json",
+      "bytes": 1747795,
+      "sha256": "22c957348eed495ee925afc40a36da3e387c8a34a734c8486967c2dca271613e"
+    },
+    {
+      "file": "encoder_model_quantized.onnx",
+      "bytes": 52899742,
+      "sha256": "d3b7912bf6a9bd27e4c074c2df91d4ff3d5b4bc5f7f6c8d7cc9c805c98fbafee"
+    },
+    {
+      "file": "decoder_model_quantized.onnx",
+      "bytes": 59842102,
+      "sha256": "2c66a3981099b40edbb3a0d65e015d05964d42fecb9780f8422776eff5939112"
+    }
+  ]
+}

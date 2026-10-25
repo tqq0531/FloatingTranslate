@@ -1,3 +1,20 @@
+# Android 0.1.6 验证 / Validation
+
+在 Mac 的 Pixel 6 Android 16 模拟器（4 KB 页）完成本次验证。安装包内置中英双向模型，测试 APK 不会发给用户。
+
+Validated on a Pixel 6 Android 16 emulator running on macOS (4 KB pages). Both translation directions are bundled; the instrumentation APK is not distributed to users.
+
+- 10 项 JVM 测试：真实拼音词库、简拼、24 小时到期边界、去重不续期、容量限制和模型进度。
+- 16 项键盘/设置/剪贴板设备测试全部通过（关闭模拟器 Wi-Fi 和移动数据后重跑）：错位按键几何、触摸间隙、长按退格、Shift、数字符号、中文分段整句、英文空格后继续整句、原文与译文提交、发送动作、敏感字段隔离、历史加密/过期/插入/删除/清空。
+- 外观设备测试：44/54/68 dp 按键高度变化；键盘内切深色与调高度保留 `hello world` 草稿；三种主题设置持久化；真实 `cmd uimode night no → yes → no` 下截图像素验证白键转深灰再转白。
+- 1 项独立真实模型测试通过（内含双向多条句子、取消与模型切换；Wi-Fi/移动数据关闭）：`你好 → Hello.`；`I want to go to the gym now → 我现在想去健身房`；`The cat is sleeping on the sofa. → 猫睡在沙发上`；`Hi my name is Jack → 嗨,我叫杰克。`，另测中译英整句、hi、取消、方向切回及双方初始化。
+- Debug APK/测试 APK、JUnit、Android Lint 构建通过；Lint 无错误，保留原生控件、中文硬编码和旧 API 等建议。两套模型都由构建任务按 SHA-256 和大小验证。
+- 截图来自实际模拟器，测试仅对测试用 Activity 暂时关闭防截图标志；正式设置页保持该保护。模拟器可见窗口已在 Mac 打开供体验。
+
+尚未覆盖各品牌真机、16 KB 内存页设备或所有宿主应用；模拟器结果不代表全部机型兼容。翻译模型可能误译，双向切换有首次加载开销。
+
+## 历史版本记录 / Previous versions
+
 # Android 0.1.4 测试记录
 
 日期：2026-10-21。设备：独立、全新数据的 Android 16 / API 36 arm64 模拟器。没有读取真实手机或 Mac 的剪贴板。

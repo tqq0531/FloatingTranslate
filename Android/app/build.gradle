@@ -7,11 +7,12 @@ android {
         applicationId 'com.fuyi.keyboard'
         minSdk 26
         targetSdk 36
-        versionCode 6
-        versionName '0.1.5'
+        versionCode 7
+        versionName '0.1.6'
         testInstrumentationRunner 'android.test.InstrumentationTestRunner'
         ndk { abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64', 'x86' }
     }
+    buildFeatures { buildConfig true }
     compileOptions { coreLibraryDesugaringEnabled true; sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
     useLibrary 'android.test.runner'
     useLibrary 'android.test.base'
@@ -30,7 +31,8 @@ dependencies {
 // Never silently ship an APK without its offline model. No automatic network fetch in Gradle.
 tasks.register('verifyBundledTranslation') {
     doLast {
-        def dir=file('src/main/assets/translation')
+        ['translation','translation-en-zh'].each { direction ->
+        def dir=file('src/main/assets/'+direction)
         def manifest=new groovy.json.JsonSlurper().parse(new File(dir,'manifest.json'))
         manifest.files.each { entry ->
             def model=new File(dir,entry.file)
@@ -38,6 +40,7 @@ tasks.register('verifyBundledTranslation') {
             def digest=java.security.MessageDigest.getInstance('SHA-256')
             model.withInputStream { stream -> byte[] buffer=new byte[65536]; int n; while((n=stream.read(buffer))>0) digest.update(buffer,0,n) }
             if(digest.digest().encodeHex().toString()!=entry.sha256) throw new GradleException('Model checksum mismatch: '+entry.file)
+        }
         }
     }
 }

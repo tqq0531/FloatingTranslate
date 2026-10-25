@@ -12,10 +12,24 @@ ONNX conversion and quantized weights: Xenova/opus-mt-zh-en
 https://huggingface.co/Xenova/opus-mt-zh-en
 Pinned revision: 39d480d52a9ea3065a1f117adfe4dbc55de10e6f
 FloatingTranslate modifications: packages the upstream int8 ONNX weights unchanged;
-exports a SentencePiece tokenizer graph and vocabulary ID map, and uses greedy
-CPU decoding (not the upstream beam-search default). Model not fine-tuned here.
+exports a SentencePiece tokenizer graph and vocabulary ID map, and uses local CPU beam decoding with repeated-token-loop suppression.
+Model not fine-tuned here.
 
 Inference: Microsoft ONNX Runtime 1.23.2, MIT License.
 Tokenization: Microsoft ONNX Runtime Extensions 0.13.0, MIT License.
 License texts are included in this directory. Runtime third-party notices are
 included by their upstream AARs where applicable.
+
+Bundled English-to-Chinese translation model
+Base model: Helsinki-NLP/opus-mt-en-zh
+https://huggingface.co/Helsinki-NLP/opus-mt-en-zh
+OPUS-MT, University of Helsinki; Jörg Tiedemann and Santhosh Thottingal.
+License: Apache License 2.0 (OPUS-MT-EN-ZH-APACHE-2.0.txt).
+ONNX conversion: Xenova/opus-mt-en-zh
+https://huggingface.co/Xenova/opus-mt-en-zh
+Pinned revision: 046f55aec303cdee3e0318604406d4df20f1e8ea
+The upstream int8 encoder and decoder weights are bundled unchanged.
+FloatingTranslate exports a SentencePiece ONNX tokenizer and vocabulary map,
+uses the >>cmn_Hans<< target prefix, CPU beam search and token-loop suppression.
+The model has not been fine-tuned. No endorsement by the authors is implied.
+Both directions operate fully offline; input is not uploaded or persisted.
