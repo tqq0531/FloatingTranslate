@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <utility>
+#include <array>
 namespace fuyi {
 // Each direction keeps an independent default; Tab requests the opposite.
 inline bool translationOnCommit(bool englishInput, bool pinyinToEnglish,
@@ -98,6 +99,43 @@ struct ShiftTap {
 struct Rect {
     int left, top, right, bottom;
 };
+inline std::optional<Rect> searchFallbackAnchor(Rect extent, bool windows11, int dpi) {
+    if (dpi < 96 || dpi > 768 || extent.right <= extent.left || extent.bottom <= extent.top ||
+        extent.right - extent.left > 10000 || extent.bottom - extent.top > 4000) return {};
+    auto d = [dpi](int value) { return (value*dpi+48)/96; };
+    if (extent.bottom-extent.top <= d(160))
+        return Rect{extent.left, extent.top, extent.left+1, extent.bottom};
+    int top = windows11 ? extent.top+d(36) : extent.bottom-d(36);
+    return Rect{extent.left+d(24), top, extent.left+d(24)+1, top+d(24)};
+}
+inline std::optional<std::array<unsigned, 4>> runtimeVersionParts(const std::wstring &value) {
+    std::array<unsigned, 4> result{};
+    size_t part = 0, digits = 0;
+    for (wchar_t c : value) {
+        if (c == L'.') {
+            if (!digits || ++part >= result.size()) return {};
+            digits = 0;
+        } else if (c >= L'0' && c <= L'9' && ++digits <= 6) result[part] = result[part]*10 + (c-L'0');
+        else return {};
+    }
+    if (!digits || part < 2) return {};
+    return result;
+}
+inline bool olderRuntimeVersion(const std::wstring &candidate, const std::wstring &current) {
+    auto a = runtimeVersionParts(candidate), b = runtimeVersionParts(current);
+    return a && b && *a < *b;
+}
+inline std::optional<uint32_t> rimeCachePid(const std::wstring &name) {
+    const std::wstring prefix = L"FuyiRime-";
+    if (name.rfind(prefix, 0) != 0 || name.size() <= prefix.size() || name.size() > prefix.size()+10) return {};
+    uint64_t pid = 0;
+    for (size_t i=prefix.size(); i<name.size(); ++i) {
+        if (name[i] < L'0' || name[i] > L'9') return {};
+        pid = pid*10 + name[i]-L'0';
+        if (pid > UINT32_MAX) return {};
+    }
+    return pid ? std::optional<uint32_t>((uint32_t)pid) : std::nullopt;
+}
 inline std::optional<Rect> place(Rect anchor, int width, int height, Rect work, bool above) {
     if (anchor.bottom <= anchor.top || anchor.bottom - anchor.top > 500 || anchor.right < anchor.left ||
         anchor.right - anchor.left > 10000 || width <= 0 || height <= 0 || anchor.right < work.left ||

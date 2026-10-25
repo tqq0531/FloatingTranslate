@@ -1,5 +1,6 @@
 #include "Ids.h"
 #include "InstallRuntime.h"
+#include "Maintenance.h"
 #include "PersonalDictionary.h"
 #include "Translator.h"
 #include "WinUtil.h"
@@ -7,6 +8,7 @@
 #include <msctf.h>
 #include <shellapi.h>
 #include <thread>
+#include <iostream>
 namespace fuyi {
 HINSTANCE module = nullptr;
 static HFONT font = nullptr, heading = nullptr;
@@ -52,9 +54,12 @@ static bool profile(bool enable) {
     return ok != FALSE;
 }
 static bool elevatedRegistration(bool enable, const std::wstring &sid = L"") {
+    const char *stage = "begin";
     try {
         if (enable) {
+            stage = "verify-models";
             verifyModels();
+            stage = "load-runtime";
             auto runtime = loadLocal(L"onnxruntime.dll");
             if (!runtime) {
                 DWORD code = 1;
@@ -68,14 +73,21 @@ static bool elevatedRegistration(bool enable, const std::wstring &sid = L"") {
             FreeLibrary(runtime);
             // Validate Rime and actual inference in a separate process before loading
             // the new input service into any user's application.
-            if (!run(directory() / L"FuyiCheck.exe", L"", false, nullptr, true))
+            stage = "offline-check";
+            DWORD checkCode = 1;
+            if (!run(directory() / L"FuyiCheck.exe", L"", false, &checkCode, true)) {
+                std::cerr << "Upgrade offline check failed: " << checkCode << "; Win32=" << GetLastError() << "\n";
                 return false;
+            }
         }
         auto runtimeDirectory = directory();
         if (enable) {
+            stage = "prepare-preferences";
             preparePreferences(sid.empty() ? userSid() : sid);
+            stage = "install-runtime";
             runtimeDirectory = installRuntime();
         }
+        stage = "register-service";
         auto dll = LoadLibraryExW((runtimeDirectory / L"FuyiIME.dll").c_str(), nullptr,
             LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
         if (!dll)
@@ -84,8 +96,16 @@ static bool elevatedRegistration(bool enable, const std::wstring &sid = L"") {
         auto function = (Register)GetProcAddress(dll, enable ? "DllRegisterServer" : "DllUnregisterServer");
         HRESULT hr = function ? function() : E_FAIL;
         FreeLibrary(dll);
+        if (enable && SUCCEEDED(hr)) {
+            maintainUserRuntime();
+            cleanOldRuntimes();
+        }
         return SUCCEEDED(hr);
+    } catch (const std::exception &error) {
+        std::cerr << "Upgrade failed at " << stage << ": " << error.what() << "; Win32=" << GetLastError() << "\n";
+        return false;
     } catch (...) {
+        std::cerr << "Upgrade failed at " << stage << "; Win32=" << GetLastError() << "\n";
         return false;
     }
 }
@@ -103,6 +123,7 @@ static bool enable(bool value) {
     }
     if (ok) {
         ok = profile(value);
+        if (value && ok) maintainUserRuntime();
         if (value && ok)
             explain(L"浮译已启用。\n\n按 Win + 空格，选择“浮译”。\n轻按 Shift 切换中文 / "
                     L"English。\n\n系统搜索兼容组件已复制到 Program Files；语言包仍来自压缩包，无需下载。"
@@ -200,7 +221,7 @@ static LRESULT CALLBACK proc(HWND w, UINT message, WPARAM a, LPARAM b) {
                 0, 34, 575, 540, 48, 0);
         control(L"BUTTON", L"使用说明", BS_PUSHBUTTON, 34, 644, 160, 36, 4);
         control(L"BUTTON", L"隐私与开源许可", BS_PUSHBUTTON, 208, 644, 180, 36, 5);
-        status = control(L"STATIC", L"0.1.10 · Windows x64 开发试用版", 0, 34, 700, 540, 40, 0);
+        status = control(L"STATIC", L"0.1.17 · Windows x64 开发试用版", 0, 34, 700, 540, 40, 0);
         return 0;
     }
     case WM_CTLCOLORSTATIC:
@@ -260,6 +281,27 @@ static LRESULT CALLBACK proc(HWND w, UINT message, WPARAM a, LPARAM b) {
         SetWindowTextW(status, a ? L"中英双向模型校验和离线翻译通过，无需网络。"
                                  : L"检查未通过，请运行“检查离线组件.cmd”查看结果。");
         return 0;
+    case WM_APP + 2:
+        if (registeredRuntime().filename() != runtimeVersion && !enable(true)) {
+            SetWindowTextW(status, L"新版尚未启用，请点击启用浮译完成升级。");
+            return 0;
+        }
+        if (!busy.exchange(true)) {
+            SetWindowTextW(status, L"正在检查旧版占用并清理过期缓存…");
+            std::thread([w] {
+                auto result = std::make_unique<std::wstring>();
+                try { *result = maintainUserRuntime(); cleanOldRuntimes(); }
+                catch (...) { *result = L"0.1.17 · 部分缓存仍在使用，下次启动重试"; }
+                if (PostMessageW(w, WM_APP+3, 0, (LPARAM)result.get())) result.release();
+            }).detach();
+        }
+        return 0;
+    case WM_APP + 3: {
+        std::unique_ptr<std::wstring> result((std::wstring *)b);
+        busy = false;
+        SetWindowTextW(status, result->c_str());
+        return 0;
+    }
     case WM_CLOSE:
         if (busy) {
             explain(L"正在处理，请等待检查或注册完成。");
@@ -285,6 +327,12 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR args, int show) {
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     InitCommonControls();
     std::wstring command = args ? args : L"";
+    if (command == L"--refresh-profile") { bool ok=profile(true);CoUninitialize();return ok?0:1; }
+    if (command == L"--maintain") {
+        try { maintainUserRuntime(); cleanOldRuntimes(); }
+        catch (...) { CoUninitialize(); return 1; }
+        CoUninitialize(); return 0;
+    }
     if (command == L"--register-elevated" || command.rfind(L"--register-elevated ", 0) == 0 ||
         command == L"--unregister-elevated") {
         bool registering = command != L"--unregister-elevated";
@@ -310,6 +358,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR args, int show) {
                              WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, CW_USEDEFAULT,
                              CW_USEDEFAULT, 612, 800, nullptr, nullptr, instance, nullptr);
     ShowWindow(w, show);
+    PostMessageW(w, WM_APP+2, 0, 0);
     MSG msg;
     while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
         if (!IsDialogMessageW(w, &msg)) {

@@ -1,6 +1,7 @@
 #pragma once
 #include "WinUtil.h"
 #include "Translator.h"
+#include "Maintenance.h"
 #include <set>
 namespace fuyi {
 inline void directoryPermissions(const fs::path &path, const std::wstring &sddl) {
@@ -39,13 +40,33 @@ inline fs::path installRuntime() {
     // Program Files already permits read/execute from AppContainers. Keep
     // dictionaries and models read-only, with no broad ACL on Desktop/AppData.
     auto root = knownFolder(FOLDERID_ProgramFiles) / L"FloatingTranslate";
-    for (auto p : {root, root / L"0.1.10"}) {
+    for (auto p : {root, root / L"0.1.17"}) {
         if (fs::exists(p) && (GetFileAttributesW(p.c_str()) & FILE_ATTRIBUTE_REPARSE_POINT))
             throw std::runtime_error("Runtime path is a reparse point");
         fs::create_directory(p);
     }
-    auto destination = root / L"0.1.10";
+    auto destination = root / L"0.1.17";
     auto source = directory();
+    // Never privatize or partially overwrite a registered runtime while an
+    // application still has different bytes from that same version loaded.
+    if ((fs::exists(destination/L"SHA256SUMS.txt") || fs::exists(destination/L"FuyiIME.dll")) &&
+        !fs::equivalent(source, destination)) {
+        auto lines = [](const fs::path &file) {
+            std::ifstream in(file); std::vector<std::string> result; std::string line;
+            while (std::getline(in, line)) {
+                if (!line.empty() && line.back() == '\r') line.pop_back();
+                result.push_back(line);
+            }
+            return result;
+        };
+        if (lines(source/L"SHA256SUMS.txt") != lines(destination/L"SHA256SUMS.txt")) {
+            bool complete = false;
+            auto users = runtimeUsers(&complete);
+            if (!complete || std::any_of(users.begin(), users.end(), [&](const auto &user) {
+                    return _wcsicmp(user.folder.c_str(), destination.c_str()) == 0;
+                })) throw std::runtime_error("Changed runtime version is still in use; close its applications or use a new version");
+        }
+    }
     // Copy into an administrator-only directory until every delivered byte is
     // verified. Do not expose a changed source file through the new read ACL.
     const std::wstring privateCopy=L"D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)";
@@ -80,7 +101,7 @@ inline fs::path installRuntime() {
             }
         }
         if (!fs::is_regular_file(input) || fileSha(input) != line.substr(0, 64))
-            throw std::runtime_error("Package integrity check failed");
+            throw std::runtime_error("Package integrity check failed: " + utf8(relative.wstring()));
         fs::create_directories(target.parent_path());
         for(auto verified=target;verified!=destination;verified=verified.parent_path())verifiedPaths.insert(verified);
         if (fs::is_regular_file(target) && fs::file_size(input) == fs::file_size(target) &&

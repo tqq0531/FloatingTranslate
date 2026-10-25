@@ -1,12 +1,13 @@
 #include "Ids.h"
 #include "WinUtil.h"
+#include "CandidateUI.h"
 #include <msctf.h>
 namespace fuyi {
 // Public TSF capability GUIDs absent from LLVM-MinGW's older msctf.h.
 static const GUID immersiveCategory = {0x13a016df, 0x560b, 0x46cd, {0x94,0x7a,0x4c,0x3a,0xf1,0xe0,0xe3,0x5d}};
 static const GUID trayCategory = {0x25504fb4, 0x7bab, 0x4bc1, {0x9c,0x69,0xcf,0x81,0x89,0x0f,0x0e,0xf5}};
 static const GUID serviceCategories[] = {GUID_TFCAT_TIP_KEYBOARD,
-    GUID_TFCAT_DISPLAYATTRIBUTEPROVIDER, immersiveCategory, trayCategory};
+    GUID_TFCAT_DISPLAYATTRIBUTEPROVIDER, immersiveCategory, trayCategory, tsf::enabledCategory};
 static HRESULT writeKey(const std::wstring &path, const wchar_t *name, const std::wstring &value) {
     HKEY key = nullptr;
     auto result = RegCreateKeyExW(HKEY_LOCAL_MACHINE, path.c_str(), 0, nullptr, 0, KEY_SET_VALUE, nullptr,

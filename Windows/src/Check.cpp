@@ -1,5 +1,6 @@
 #include "Pinyin.h"
 #include "Translator.h"
+#include "Maintenance.h"
 #include <iostream>
 #include <aclapi.h>
 namespace fuyi {
@@ -20,8 +21,14 @@ int wmain(int argc,wchar_t** argv) {
     SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32 | LOAD_LIBRARY_SEARCH_USER_DIRS);
     SetConsoleOutputCP(CP_UTF8);
     try {
+        if (argc > 1 && std::wstring(argv[1]) == L"--host-versions") {
+            std::cout << "Registered runtime: " << utf8(registeredRuntime().wstring()) << "\n";
+            for (auto &user : runtimeUsers())
+                std::cout << user.pid << " " << utf8(user.name) << " -> " << utf8(user.folder.wstring()) << "\n";
+            return 0;
+        }
         if(argc>1 && std::wstring(argv[1])==L"--runtime-access") {
-            auto root=knownFolder(FOLDERID_ProgramFiles)/L"FloatingTranslate"/L"0.1.10";
+            auto root=knownFolder(FOLDERID_ProgramFiles)/L"FloatingTranslate"/L"0.1.17";
             bool passed=true;
             for(const auto &part:{L"FuyiIME.dll",L"librime.dll",L"RimeData/build/fuyi.schema.yaml",L"models/encoder_model_quantized.onnx",L"models/en-zh/encoder_model_quantized.onnx",L"Proofreading/en_50k.txt"}) {
                 bool ok=sandboxReadAcl(root/part,L"S-1-15-2-1")&&sandboxReadAcl(root/part,L"S-1-15-2-2");

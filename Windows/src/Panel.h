@@ -14,7 +14,7 @@ struct PanelDpiScope {
     ~PanelDpiScope() { if (set && previous) set(previous); }
 };
 class Panel {
-    HWND window_ = nullptr, tooltip_ = nullptr;
+    HWND window_ = nullptr, tooltip_ = nullptr, owner_ = nullptr;
     std::wstring pendingCopy_, copyTip_ = L"复制译文";
     int copyState_ = 0, copyAttempts_ = 0;
     DWORD copyError_ = ERROR_SUCCESS;
@@ -137,7 +137,7 @@ class Panel {
     void surface(HDC dc, const RECT &rect, int diameter, COLORREF top, COLORREF bottom,
                  COLORREF outline = CLR_INVALID) {
         int saved = SaveDC(dc);
-        HRGN shape = CreateRoundRectRgn(rect.left, rect.top, rect.right, rect.bottom, diameter, diameter);
+        HRGN shape = CreateRoundRectRgn(rect.left, rect.top, rect.right + 1, rect.bottom + 1, diameter, diameter);
         ExtSelectClipRgn(dc, shape, RGN_AND); DeleteObject(shape);
         int height = std::max(1L, rect.bottom - rect.top - 1);
         auto blend = [height](int a, int b, int y) { return a + (b - a) * y / height; };
@@ -151,11 +151,13 @@ class Panel {
         }
         RestoreDC(dc, saved);
         if (outline != CLR_INVALID) {
-            auto pen = CreatePen(PS_SOLID, 1, outline);
-            auto previousPen = SelectObject(dc, pen);
-            auto previousBrush = SelectObject(dc, GetStockObject(NULL_BRUSH));
-            RoundRect(dc, rect.left, rect.top, rect.right, rect.bottom, diameter, diameter);
-            SelectObject(dc, previousBrush); SelectObject(dc, previousPen); DeleteObject(pen);
+            // Draw inward from the same pixel-aligned shape as the window
+            // region. A centred one-pixel pen was clipped at the outer edge,
+            // and remained only one physical pixel on high-DPI monitors.
+            HRGN border = CreateRoundRectRgn(rect.left, rect.top, rect.right + 1, rect.bottom + 1, diameter, diameter);
+            HBRUSH brush = CreateSolidBrush(outline);
+            FrameRgn(dc, border, brush, std::max(2, d(2)), std::max(2, d(2)));
+            DeleteObject(brush); DeleteObject(border);
         }
     }
     void paint() {
@@ -169,9 +171,9 @@ class Panel {
         FillRect(back, &client, transparent); DeleteObject(transparent);
         RECT card = {0, 0, width_, height_};
         surface(back, card, d(PanelStyle::cornerDiameter), RGB(247, 248, 250), RGB(247, 248, 250),
-                RGB(163, 173, 187));
-        // Keep both text and selection inside the rounded, transparent window.
-        HRGN clip = CreateRoundRectRgn(1, 1, width_ - 1, height_ - 1, d(PanelStyle::cornerDiameter), d(PanelStyle::cornerDiameter));
+                RGB(112, 124, 141));
+        // Keep content inside the solid border without repainting its pixels.
+        HRGN clip = CreateRoundRectRgn(d(2), d(2), width_ - d(2) + 1, height_ - d(2) + 1, d(PanelStyle::cornerDiameter) - d(4), d(PanelStyle::cornerDiameter) - d(4));
         SelectClipRgn(back, clip); DeleteObject(clip);
         SetBkMode(back, TRANSPARENT);
         SelectObject(back, small_); SetTextColor(back, RGB(133, 140, 150));
@@ -207,7 +209,7 @@ class Panel {
             if (r.bottom < 0 || r.top >= height_) continue;
             bool active = choice.index == selected_;
             if (active) {
-                surface(back, r, d(12), RGB(0, 112, 232), RGB(0, 112, 232), RGB(0, 94, 203));
+                surface(back, r, d(12), RGB(0, 112, 232), RGB(0, 112, 232), RGB(0, 76, 173));
             }
             SetTextColor(back, active ? RGB(255, 255, 255) : RGB(70, 76, 86));
             SelectObject(back, small_);
@@ -359,9 +361,29 @@ class Panel {
     }
 
   public:
+    std::string displayState() const {
+        PanelDpiScope dpiScope;
+        RECT rect{}; GetWindowRect(window_, &rect);
+        auto owner = GetWindow(window_, GW_OWNER);
+        MONITORINFO monitor{sizeof(monitor)};
+        GetMonitorInfoW(MonitorFromWindow(window_, MONITOR_DEFAULTTONEAREST), &monitor);
+        DWORD cloaked = 0xffffffff;
+        auto library = LoadLibraryExW(L"dwmapi.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+        using Attribute = HRESULT(WINAPI *)(HWND, DWORD, PVOID, DWORD);
+        auto attribute = library ? (Attribute)GetProcAddress(library, "DwmGetWindowAttribute") : nullptr;
+        if (attribute) attribute(window_, 14, &cloaked, sizeof(cloaked));
+        if (library) FreeLibrary(library);
+        return "created="+std::to_string(IsWindow(window_))+" visible="+std::to_string(IsWindowVisible(window_))+
+            " ownerExists="+std::to_string(owner!=nullptr)+" ownerVisible="+std::to_string(IsWindowVisible(owner))+
+            " cloaked="+std::to_string(cloaked)+" dpi="+std::to_string(scale_)+" rect="+std::to_string(rect.left)+","+
+            std::to_string(rect.top)+","+std::to_string(rect.right)+","+std::to_string(rect.bottom)+" work="+
+            std::to_string(monitor.rcWork.left)+","+std::to_string(monitor.rcWork.top)+","+
+            std::to_string(monitor.rcWork.right)+","+std::to_string(monitor.rcWork.bottom);
+    }
     std::function<void(size_t)> choose;
     std::function<void()> applyCorrection;
-    Panel() {
+    void createWindow() {
+        if (window_) return;
         PanelDpiScope dpiScope;
         WNDCLASSW wc = {};
         wc.lpfnWndProc = proc;
@@ -370,10 +392,12 @@ class Panel {
         wc.hCursor = LoadCursorW(nullptr, IDC_IBEAM);
         // A window region, rather than colour-key transparency alone, excludes
         // the corners even in remote desktop compositors.
-        wc.style = 0;
+        // The shell must recognize this as an IME window. An ordinary tool
+        // window created inside Search/AppContainer is shell-cloaked.
+        wc.style = CS_IME;
         RegisterClassW(&wc);
         CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST, wc.lpszClassName,
-                        L"浮译", WS_POPUP, 0, 0, width_, height_, nullptr, nullptr, module, this);
+                        L"浮译", WS_POPUP, 0, 0, width_, height_, owner_, nullptr, module, this);
         INITCOMMONCONTROLSEX controls = {sizeof(controls), ICC_WIN95_CLASSES};
         InitCommonControlsEx(&controls);
         tooltip_ = CreateWindowExW(WS_EX_TOPMOST | WS_EX_NOACTIVATE, TOOLTIPS_CLASSW, nullptr,
@@ -385,8 +409,8 @@ class Panel {
             tool.rect = copyHit(); tool.lpszText = copyTip_.data();
             SendMessageW(tooltip_, TTM_ADDTOOLW, 0, (LPARAM)&tool);
         }
-        fonts();
     }
+    Panel() { fonts(); }
     ~Panel() {
         if (tooltip_) DestroyWindow(tooltip_);
         if (window_)
@@ -398,9 +422,15 @@ class Panel {
         if (candidateFont_) DeleteObject(candidateFont_);
     }
     void setOwner(HWND owner) {
-        if(window_ && owner && owner!=window_ && IsWindow(owner))
-            SetWindowLongPtrW(window_,GWLP_HWNDPARENT,(LONG_PTR)owner);
+        // Use the TSF view's exact HWND, including a hidden CoreText transport
+        // window. The shell uses this association to identify the app's IME UI;
+        // replacing it with a visible root loses that association.
+        if (!owner) owner = GetFocus();
+        if (owner == window_ || (owner && !IsWindow(owner))) owner = nullptr;
+        owner_ = owner;
+        if (window_) SetWindowLongPtrW(window_, GWLP_HWNDPARENT, (LONG_PTR)owner_);
     }
+
     void hide() {
         if(window_ && IsWindowVisible(window_))NotifyWinEvent(EVENT_OBJECT_IME_HIDE,window_,OBJID_CLIENT,CHILDID_SELF);
         pendingCopy_.clear();
@@ -433,6 +463,7 @@ class Panel {
     void show(RECT anchor, const std::wstring &english, const std::wstring &status, const std::wstring &raw,
               const std::vector<Candidate> &choices, size_t selected, bool above, bool toChinese = false, const std::wstring &correction=L"", const std::wstring &advice=L"") {
         PanelDpiScope dpiScope;
+        createWindow();
         if (!window_)
             return;
         if (english_ != english) {

@@ -6,6 +6,24 @@
 #include <iostream>
 using namespace fuyi;
 int main() {
+    assert(olderRuntimeVersion(L"0.1.9", L"0.1.11"));
+    assert(olderRuntimeVersion(L"0.1.10", L"0.1.11"));
+    assert(!olderRuntimeVersion(L"0.1.11", L"0.1.11"));
+    assert(!olderRuntimeVersion(L"0.1.12", L"0.1.11"));
+    assert(!olderRuntimeVersion(L"0.1.9-backup", L"0.1.11"));
+    assert(!olderRuntimeVersion(L"../0.1.9", L"0.1.11"));
+    assert(!runtimeVersionParts(L"0..1"));
+    assert(!runtimeVersionParts(L"0.1.1234567"));
+    assert(rimeCachePid(L"FuyiRime-1234") == 1234);
+    assert(!rimeCachePid(L"FuyiRime-0"));
+    assert(!rimeCachePid(L"FuyiRime-4294967296"));
+    assert(!rimeCachePid(L"FuyiRime-12-backup"));
+    auto search10 = searchFallbackAnchor({0, 300, 600, 1040}, false, 96);
+    assert(search10 && search10->top == 1004 && search10->bottom <= 1040);
+    auto search11 = searchFallbackAnchor({-1400, 100, -700, 900}, true, 144);
+    assert(search11 && search11->left < 0 && search11->top == 154 && search11->bottom <= 900);
+    assert(place(*search10, 440, 74, {0,0,1920,1040}, false));
+    assert(!searchFallbackAnchor({0,0,0,0}, false, 96));
     assert(insertedSentence(L"我去北京", 1, L"今天") == L"我今天去北京");
     assert(insertedSentence(L"我去北京", 0, L"明天") == L"明天我去北京");
     assert(insertedSentence(L"我去北京", 4, L"。") == L"我去北京。");

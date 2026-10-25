@@ -1,4 +1,5 @@
 #include "Core.h"
+#include "CandidateUI.h"
 #include "DisplayAttribute.h"
 #include "Ids.h"
 #include "Panel.h"
@@ -197,6 +198,11 @@ class TextService : public ITfTextInputProcessorEx,
     ITfLangBarItemMgr *bar_ = nullptr;
     HWND messages_ = nullptr;
     std::unique_ptr<Panel> panel_;
+    tsf::UIManager *uiManager_ = nullptr;
+    CandidateUI *candidateUI_ = nullptr;
+    DWORD candidateUIId_ = (DWORD)-1;
+    bool customUI_ = true;
+    HRESULT uiResult_ = E_NOINTERFACE;
     std::shared_ptr<TranslationTarget> target_ = std::make_shared<TranslationTarget>();
     Options options_, diskAtOverride_;
     std::optional<Options> unsavedOptions_;
@@ -233,6 +239,7 @@ class TextService : public ITfTextInputProcessorEx,
             SetWindowLongPtrW(w, GWLP_USERDATA, (LONG_PTR)self);
         }
         if (self) {
+            if (message == WM_APP+102) { if(self->active_)self->draw(); return 0; }
             if (message == WM_TRANSLATED) {
                 std::unique_ptr<TranslationResult> r((TranslationResult *)b);
                 if (self->active_ && r->token == self->target_->token && r->ticket == self->revision_ &&
@@ -335,6 +342,7 @@ class TextService : public ITfTextInputProcessorEx,
         requestedSource_.clear();
     }
     void clear() {
+        endCandidateUI();
         finishComposition();
         cancel();
         raw_.clear();
@@ -675,6 +683,53 @@ class TextService : public ITfTextInputProcessorEx,
         auto part = fragment();
         return insertedSentence(sentence_.text, insertionOffset_, part ? *part : L"");
     }
+    void endCandidateUI() {
+        if (candidateUI_) candidateUI_->disconnect();
+        if (uiManager_ && candidateUIId_ != (DWORD)-1) uiManager_->EndUIElement(candidateUIId_);
+        candidateUIId_ = (DWORD)-1;
+        release(candidateUI_);
+        customUI_ = true;
+    }
+    void publishCandidates() {
+        if (!uiManager_ || !active_ || secure_ || options_.privacy || candidates_.empty()) {
+            endCandidateUI(); return;
+        }
+        if (!candidateUI_) {
+            candidateUI_ = new CandidateUI;
+            ITfDocumentMgr *document = nullptr;
+            if (context_ && SUCCEEDED(context_->GetDocumentMgr(&document))) {
+                candidateUI_->document(document); document->Release();
+            }
+            candidateUI_->select = [this](UINT index, bool finalize) {
+                auto raw = raw_; auto revision = revision_;
+                return request([this,index,finalize,raw,revision](TfEditCookie ec) {
+                    if (raw_ != raw || revision_ != revision || sensitive(ec) || index >= candidates_.size()) return E_ABORT;
+                    if (finalize) choose(ec,index);
+                    else { selected_=index; translate(); geometry(ec); }
+                    return S_OK;
+                },false,true);
+            };
+            candidateUI_->abort = [this] { return request([this](TfEditCookie ec) { key(ec,VK_ESCAPE);return S_OK; },false,true); };
+            candidateUI_->key = [this](WPARAM code, BOOL *eaten) {
+                auto handled=std::make_shared<bool>(false);
+                auto result=request([this,code,handled](TfEditCookie ec){*handled=key(ec,code);return S_OK;});
+                *eaten=SUCCEEDED(result)&&result!=TF_S_ASYNC&&*handled;return S_OK;
+            };
+            candidateUI_->visibility = [this](bool show) {
+                customUI_=show;
+                if(!show && panel_)panel_->hide();
+                if(messages_)PostMessageW(messages_,WM_APP+102,0,0);
+            };
+            candidateUI_->update(candidates_,selected_);
+            BOOL show = TRUE;
+            uiResult_ = uiManager_->BeginUIElement((tsf::CandidateBehavior*)candidateUI_, &show, &candidateUIId_);
+            if (SUCCEEDED(uiResult_)) {
+                customUI_ = show != FALSE;
+                candidateUI_->Show(show);
+                uiManager_->UpdateUIElement(candidateUIId_);
+            } else { candidateUIId_=(DWORD)-1;release(candidateUI_); }
+        } else if (candidateUI_->update(candidates_,selected_)) uiManager_->UpdateUIElement(candidateUIId_);
+    }
     void translate() {
         auto value = source();
         if (value == requestedSource_ && !value.empty())
@@ -689,6 +744,7 @@ class TextService : public ITfTextInputProcessorEx,
         worker().submit(target_, revision_, value, options_.direct);
     }
     void geometry(TfEditCookie ec) {
+        HRESULT caretResult = E_FAIL, textResult = E_FAIL, viewResult = E_FAIL;
         ITfContextView *view = nullptr;
         ITfRange *range = nullptr;
         if (composition_)
@@ -706,8 +762,17 @@ class TextService : public ITfTextInputProcessorEx,
             HWND owner=nullptr;
             if(FAILED(view->GetWnd(&owner)) || !owner)owner=GetFocus();
             if(panel_)panel_->setOwner(owner);
-            range->Collapse(ec, TF_ANCHOR_END);
-            valid = SUCCEEDED(view->GetTextExt(ec, range, &rect, &clipped)) && !clipped &&
+            ITfRange *caret = nullptr;
+            range->Clone(&caret);
+            if (caret) caret->Collapse(ec, TF_ANCHOR_END);
+            if (caret)
+                valid = SUCCEEDED(caretResult = view->GetTextExt(ec, caret, &rect, &clipped)) && !clipped &&
+                        rect.bottom > rect.top && rect.bottom - rect.top < 500;
+            release(caret);
+            // CoreText hosts can expose a composition rectangle while refusing
+            // a zero-length caret range. Keep the original range for this query.
+            if (!valid)
+            valid = SUCCEEDED(textResult = view->GetTextExt(ec, range, &rect, &clipped)) && !clipped &&
                     rect.bottom > rect.top && rect.bottom - rect.top < 500;
             release(view);
         }
@@ -730,11 +795,27 @@ class TextService : public ITfTextInputProcessorEx,
             ITfContextView *fallback = nullptr;
             if (SUCCEEDED(context_->GetActiveView(&fallback))) {
                 RECT extent{};
-                if (SUCCEEDED(fallback->GetScreenExt(&extent)) &&
-                    extent.right > extent.left && extent.bottom > extent.top &&
-                    extent.bottom - extent.top <= 160) {
-                    rect = {extent.left, extent.top, extent.left + 1, extent.bottom};
-                    valid = true;
+                HWND owner = nullptr;
+                if (FAILED(fallback->GetWnd(&owner)) || !owner) owner = GetFocus();
+                wchar_t host[32768]{};
+                GetModuleFileNameW(nullptr, host, 32768);
+                auto executable = fs::path(host).filename().wstring();
+                bool search = _wcsicmp(executable.c_str(), L"SearchApp.exe") == 0 ||
+                    _wcsicmp(executable.c_str(), L"SearchHost.exe") == 0 || _wcsicmp(executable.c_str(), L"SearchUI.exe") == 0;
+                bool haveExtent = SUCCEEDED(viewResult = fallback->GetScreenExt(&extent)) &&
+                    extent.right > extent.left && extent.bottom > extent.top;
+                if (!haveExtent && search && owner) haveExtent = GetWindowRect(owner, &extent) != FALSE;
+                if (haveExtent && (extent.bottom-extent.top <= 160 || search)) {
+                    OSVERSIONINFOW version{sizeof(version)};
+                    using Version = LONG(WINAPI *)(OSVERSIONINFOW *);
+                    auto getVersion = (Version)GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "RtlGetVersion");
+                    if (getVersion) getVersion(&version);
+                    using WindowDpi = UINT(WINAPI *)(HWND);
+                    auto getDpi = (WindowDpi)GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetDpiForWindow");
+                    UINT dpi = owner && getDpi ? getDpi(owner) : 96;
+                    auto anchor = searchFallbackAnchor({extent.left, extent.top, extent.right, extent.bottom}, version.dwBuildNumber >= 22000, (int)dpi);
+                    if (anchor) { rect = {anchor->left, anchor->top, anchor->right, anchor->bottom}; valid = true; }
+                    if (panel_) panel_->setOwner(owner);
                 }
                 release(fallback);
             }
@@ -744,8 +825,20 @@ class TextService : public ITfTextInputProcessorEx,
             haveAnchor_ = true;
         }
         draw();
+#ifdef FUYI_DISPLAY_DIAGNOSTICS
+        try {
+            std::ofstream out(pinyinRuntime()/L"display-status.txt", std::ios::trunc);
+            out << "anchor=" << haveAnchor_ << " valid=" << valid << " caret=" << std::hex << caretResult
+                << " text=" << textResult << " screen=" << viewResult << " secure=" << secure_
+                << " privacy=" << options_.privacy << " ui=" << uiResult_ << " customUI=" << customUI_
+                << " queried=" << (candidateUI_ ? candidateUI_->queried : 0)
+                << "\n" << (panel_ ? panel_->displayState() : "no panel") << "\n";
+        } catch (...) {}
+#endif
     }
     void draw() {
+        publishCandidates();
+        if (candidateUI_ && !customUI_) { if(panel_)panel_->hide();return; }
         if (!panel_ || !active_ || secure_ || options_.privacy ||
             (!composing() && sentence_.text.empty()) || !haveAnchor_) {
             if (panel_)
@@ -1186,6 +1279,7 @@ class TextService : public ITfTextInputProcessorEx,
             Deactivate();
         manager_ = manager;
         manager_->AddRef();
+        manager_->QueryInterface(tsf::managerId, (void**)&uiManager_);
         client_ = client;
         flags_ = flags;
         secure_ = (flags & TF_TMAE_SECUREMODE) != 0;
@@ -1341,6 +1435,8 @@ class TextService : public ITfTextInputProcessorEx,
         }
         managerCookie_ = focusCookie_ = TF_INVALID_COOKIE;
         release(managerSource_);
+        endCandidateUI();
+        release(uiManager_);
         release(manager_);
         client_ = TF_CLIENTID_NULL;
         return S_OK;
