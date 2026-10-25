@@ -534,6 +534,12 @@ class TextService : public ITfTextInputProcessorEx,
     // disable replacement until the host provides reliable evidence again.
     RangeEvidence syncSentence(TfEditCookie ec) {
         if (composition_ || !sentenceRange_) return RangeEvidence::Unknown;
+        // WeChat can invalidate the committed composition's anchors after
+        // accepting a candidate. An empty anchor is not evidence that the user
+        // deleted the sentence. Preserve the preview and disable replacement.
+        BOOL invalidated = FALSE;
+        if (!sentence_.text.empty() && SUCCEEDED(sentenceRange_->IsEmpty(ec, &invalidated)) && invalidated)
+            return RangeEvidence::Unknown;
         TF_SELECTION sel{}; ULONG count = 0;
         if (FAILED(context_->GetSelection(ec, TF_DEFAULT_SELECTION, 1, &sel, &count)) || !count || !sel.range)
             return RangeEvidence::Unknown;
@@ -554,6 +560,7 @@ class TextService : public ITfTextInputProcessorEx,
             SUCCEEDED(prefix->GetText(ec, 0, left, 1001, &offset)) && offset <= length;
         release(prefix); sel.range->Release();
         if (!valid) return RangeEvidence::Unknown;
+        if (!length && !sentence_.text.empty()) return RangeEvidence::Unknown;
         if (length > 1000 || std::wstring(text, length).find_first_of(L"\r\n") != std::wstring::npos)
             return RangeEvidence::Different;
         bool finished = sentence_.finished && offset == length && sentence_.text == std::wstring(text, length);

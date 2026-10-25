@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "Version.h"
 namespace fuyi {
 inline bool appContainer() {
     HANDLE token = nullptr;
@@ -81,7 +82,9 @@ inline std::filesystem::path pinyinRuntime() {
         if (!n || n >= temp.size()) throw std::runtime_error("Temporary storage unavailable");
         base = std::wstring(temp.data(), n);
     }
-    auto result = base / (L"FuyiRime-" + std::to_wstring(GetCurrentProcessId()));
+    // New and retired TIPs may coexist in a host until its normal exit. They
+    // must not share a live Rime user directory or compiled-cache lock files.
+    auto result = base / (L"FuyiRime-" + std::to_wstring(GetCurrentProcessId())) / runtimeVersion;
     std::filesystem::create_directories(result);
     return result;
 }

@@ -1,4 +1,8 @@
-# 0.1.22 验证记录
+# 0.1.25 验证记录
+
+新增纯回归覆盖版本对应的 COM 标识互异、旧标识识别；临时目录夹具覆盖按版本分隔的缓存、多应用包标准临时目录发现、无关 LocalState 排除、活动进程保护和重复维护。构建测试不激活用户配置。部署验收须检查 FORSESSION 激活返回值、当前激活服务标识及微信/Codex 等进程下次输入是否加载新版。旧模块仍驻留不能直接等同于旧服务仍用于输入。
+
+## 0.1.22 验证记录
 
 用户实拍指出 0.1.21 圆角外仍有黑色尖角；搜索日志 composition=1、compositionError=0、cloaked=0 证明不是回退或隐藏。0.1.22 增加创建阶段的无重定向位图标记，并由 WM_NCCREATE 记录及测试断言，而不只检查创建后的样式。待用户复核最终边角和透明模糊。
 
@@ -175,3 +179,13 @@ Shared core/layout regressions cover retained sentence context, unavailable-vers
 - 32 位宿主程序、Windows ARM64 原生程序和安全桌面不支持；系统搜索/UWP/沉浸式宿主及管理员程序尚未实机验收。
 - 分发包未做商业代码签名；不要求测试人员关闭杀毒、安全启动或 SmartScreen 来绕过错误。文件若被阻止或隔离，应停止并报告。
 - 翻译模型与 Apple Translation 不同，不保证与 Mac 产生相同文本。便携输入法首次仍需系统注册，0.1.2 注册 Program Files 中的副本，停用不强删占用中的版本目录。
+
+## 0.1.25 native host compatibility
+
+The offline bundle now includes native x64 and x86 TSF services and dependencies. Each architecture registers its own COM registry view. Both component checks must pass before installation. The x86 service uses the same read-only models and dictionaries as x64; Rime caches are isolated by host PID and release. ONNX Runtime x86 is pinned to 1.20.1 because later releases no longer provide that architecture.
+
+Committed range invalidation preserves a copy-only translation preview; it is not treated as evidence that the sentence was deleted. Automatic replacement still requires verified ranges. WeChat candidate commit and WPS document input require native UI acceptance; component checks alone do not establish those outcomes.
+
+0.1.25 regression: overlapping panels reproduced a native 0xc0000005 before the fix. DispatcherQueue controllers now remain owned by the UI thread for process lifetime, so destroying one panel does not shut down another context or release. x64 and x86 native tests destroy the earlier panel and pump messages while redrawing the later panel.
+
+Recovery deployment: --prepare-startup points login maintenance at the verified release without deactivating faulty pre-0.1.25 modules in running applications. One Windows restart is needed for this recovery; future releases retain the thread-owned queue and automatic TSF profile migration. Native UI acceptance in WeChat/WPS remains pending after login.

@@ -46,7 +46,6 @@ class CompositionBackdrop {
     winrt::Windows::UI::Composition::CompositionRoundedRectangleGeometry geometry_{nullptr};
     winrt::Windows::UI::Composition::CompositionGraphicsDevice graphics_{nullptr};
     winrt::Windows::UI::Composition::CompositionDrawingSurface surface_{nullptr};
-    winrt::Windows::System::DispatcherQueueController queue_{nullptr};
     winrt::com_ptr<ID3D11Device> d3d_;
     winrt::com_ptr<ID2D1Device> d2d_;
     bool initialized_ = false;
@@ -77,8 +76,6 @@ class CompositionBackdrop {
         surface_=nullptr;graphics_=nullptr;geometry_=nullptr;
         foreground_=nullptr;backdrop_=nullptr;root_=nullptr;target_=nullptr;compositor_=nullptr;
         d2d_=nullptr;d3d_=nullptr;width_=height_=0;
-        try{if(queue_)queue_.ShutdownQueueAsync();}catch(...){}
-        queue_=nullptr;
         if(initialized_){RoUninitialize();initialized_=false;}
     }
     bool start(HWND window) noexcept {
@@ -92,12 +89,18 @@ class CompositionBackdrop {
                 struct Options{DWORD size;int thread,apartment;} options{sizeof(Options),2,0};
                 using Create=HRESULT(WINAPI*)(Options,void**);
                 auto create=core?(Create)GetProcAddress(core,"CreateDispatcherQueueController"):nullptr;
-                HRESULT status=create?create(options,winrt::put_abi(queue_)):E_NOINTERFACE;
+                // DispatcherQueue belongs to the host UI thread, not a panel.
+                // Another input context (or next release) can already be using
+                // it when this panel closes. Keep our controller for the thread's
+                // process lifetime; never shut down a host thread's dispatcher.
+                struct ThreadQueue {winrt::Windows::System::DispatcherQueueController value{nullptr};};
+                static thread_local auto *controller = new ThreadQueue;
+                HRESULT status=create?create(options,winrt::put_abi(controller->value)):E_NOINTERFACE;
                 if(core)FreeLibrary(core);
                 // UWP/CoreText may already have a CoreDispatcher without a
                 // Windows.System queue. In that case the host's dispatcher can
                 // support Compositor directly; do not reject it prematurely.
-                if(FAILED(status))queue_=nullptr;
+                if(FAILED(status))controller->value=nullptr;
             }
             compositor_=winrt::Windows::UI::Composition::Compositor();
             auto desktop=composition_native::query<composition_native::Desktop>(compositor_,composition_native::desktopId);

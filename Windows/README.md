@@ -1,4 +1,12 @@
-# 浮译 Windows · 0.1.22 开发试用版
+# 浮译 Windows · 0.1.25 开发试用版
+
+## 0.1.25 启动升级与全会话输入配置迁移
+
+- 每个发行版本使用由版本号确定的独立 TSF/COM 服务标识。新激活不再复用已打开软件中的旧 COM 类工厂；不在宿主中强卸载 DLL、不强杀微信或 Codex。
+- 首次启动新版设置会安装/启用新版用户配置，通过 TSF 的 FORSESSION 激活新配置，并检查调用线程的激活结果；随后移除当前用户的旧浮译入口。后续启动不会反复覆盖用户选择的其他输入法。“刷新所有软件”可主动再次通知当前会话。
+- 运行中的旧模块可能继续驻留到软件正常退出，这与新版是否用于输入是两回事。系统是否完成各宿主的切换仍需实机检查，不能只看旧 DLL 是否还在内存里。
+- 拼音临时目录按进程和发行版本隔离，避免新旧服务同时驻留时复用旧缓存和锁文件。启动维护检查普通 TEMP 和所有当前用户应用包的标准临时目录，只清理已退出进程的浮译专属缓存；个人设置、选词记忆和其他软件缓存保留。
+- 当前用户登录时自动运行已安装副本的维护命令；停用浮译会移除该启动项。此功能由用户要求的自动启动更新提供，不静默重启系统。
 
 ## 0.1.22 窗口创建阶段修正
 
@@ -204,3 +212,9 @@ Save documents and restart Windows after upgrading: opening new settings does no
 
 0.1.9：未上屏的分段拼音按退格，撤回最近选词，恢复其拼音并保留后续输入。
 Backspace restores the previous selected segment in active Pinyin composition while retaining remaining input. Committed text uses ordinary deletion.
+
+## 0.1.25 native host compatibility
+
+The offline bundle now includes native x64 and x86 TSF services and dependencies. Each architecture registers its own COM registry view. Both component checks must pass before installation. The x86 service uses the same read-only models and dictionaries as x64; Rime caches are isolated by host PID and release. ONNX Runtime x86 is pinned to 1.20.1 because later releases no longer provide that architecture.
+
+Committed range invalidation preserves a copy-only translation preview; it is not treated as evidence that the sentence was deleted. Automatic replacement still requires verified ranges. WeChat candidate commit and WPS document input require native UI acceptance; component checks alone do not establish those outcomes.

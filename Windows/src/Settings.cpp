@@ -1,6 +1,7 @@
 #include "Ids.h"
 #include "InstallRuntime.h"
 #include "Maintenance.h"
+#include "ProfileUpgrade.h"
 #include "PersonalDictionary.h"
 #include "Translator.h"
 #include "WinUtil.h"
@@ -43,15 +44,12 @@ static bool run(const fs::path &exe, const std::wstring &args, bool elevated = f
     return false;
 }
 static bool profile(bool enable) {
-    HMODULE input = LoadLibraryExW(L"input.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
-    if (!input)
-        return false;
-    using Install = BOOL(WINAPI *)(LPCWSTR, DWORD);
-    auto install = (Install)GetProcAddress(input, "InstallLayoutOrTip");
-    auto tip = L"0x0804:" + guidText(serviceId) + guidText(profileId) + L";";
-    BOOL ok = install ? install(tip.c_str(), enable ? 0 : 1) : FALSE;
-    FreeLibrary(input);
-    return ok != FALSE;
+    if(enable)return startupProfileUpgrade();
+    HKEY run=nullptr;
+    if(RegOpenKeyExW(HKEY_CURRENT_USER,L"Software\\Microsoft\\Windows\\CurrentVersion\\Run",0,KEY_SET_VALUE,&run)==ERROR_SUCCESS) {
+        RegDeleteValueW(run,L"FloatingTranslateMaintenance");RegCloseKey(run);
+    }
+    return installUserProfile(serviceId,false);
 }
 static bool elevatedRegistration(bool enable, const std::wstring &sid = L"") {
     const char *stage = "begin";
@@ -79,6 +77,15 @@ static bool elevatedRegistration(bool enable, const std::wstring &sid = L"") {
                 std::cerr << "Upgrade offline check failed: " << checkCode << "; Win32=" << GetLastError() << "\n";
                 return false;
             }
+            if (!run(directory() / L"x86" / L"FuyiCheck.exe", L"", false, &checkCode, true)) {
+                DWORD runtimeCode = 1;
+                if (!run(directory() / L"vc_redist.x86.exe", L"/install /quiet /norestart", false, &runtimeCode, true) ||
+                    (runtimeCode != 0 && runtimeCode != 1638) ||
+                    !run(directory() / L"x86" / L"FuyiCheck.exe", L"", false, &checkCode, true)) {
+                    std::cerr << "32-bit offline check failed: " << checkCode << "\n";
+                    return false;
+                }
+            }
         }
         auto runtimeDirectory = directory();
         if (enable) {
@@ -96,6 +103,14 @@ static bool elevatedRegistration(bool enable, const std::wstring &sid = L"") {
         auto function = (Register)GetProcAddress(dll, enable ? "DllRegisterServer" : "DllUnregisterServer");
         HRESULT hr = function ? function() : E_FAIL;
         FreeLibrary(dll);
+        if (SUCCEEDED(hr)) {
+            // Registration must run inside each architecture's registry view.
+            DWORD code = 1;
+            auto regsvr = knownFolder(FOLDERID_Windows) / L"SysWOW64" / L"regsvr32.exe";
+            std::wstring args = enable ? L"/s \"" : L"/s /u \"";
+            args += (runtimeDirectory / L"x86" / L"FuyiIME.dll").wstring() + L"\"";
+            if (!run(regsvr, args, false, &code, true) || code != 0) hr = E_FAIL;
+        }
         if (enable && SUCCEEDED(hr)) {
             maintainUserRuntime();
             cleanOldRuntimes();
@@ -125,9 +140,7 @@ static bool enable(bool value) {
         ok = profile(value);
         if (value && ok) maintainUserRuntime();
         if (value && ok)
-            explain(L"浮译已启用。\n\n按 Win + 空格，选择“浮译”。\n轻按 Shift 切换中文 / "
-                    L"English。\n\n系统搜索兼容组件已复制到 Program Files；语言包仍来自压缩包，无需下载。"
-                    L"更新前请先停用旧版；个别已打开的软件需保存草稿后重新打开。");
+            explain(L"新版浮译已启用，并已通知当前会话切换输入配置。\n\n后续使用浮译将激活新版组件，旧模块会在软件自然退出后释放。\n轻按 Shift 切换中文 / English。\n\n启动时会自动检查版本和过期浮译缓存，无需逐个软件清理。");
         else if (!value)
             explain(L"浮译已停用并注销。\n\n已打开的软件可能仍占用输入法文件。请先切换其他输入法并关闭使用过"
                     L"浮译的软件，再删除解压目录。无需删除其他输入法。");
@@ -221,8 +234,8 @@ static LRESULT CALLBACK proc(HWND w, UINT message, WPARAM a, LPARAM b) {
                 0, 34, 575, 540, 48, 0);
         control(L"BUTTON", L"使用说明", BS_PUSHBUTTON, 34, 644, 160, 36, 4);
         control(L"BUTTON", L"隐私与开源许可", BS_PUSHBUTTON, 208, 644, 180, 36, 5);
-        control(L"BUTTON", L"统一更新所有软件", BS_PUSHBUTTON, 402, 644, 160, 36, 7);
-        status = control(L"STATIC", L"0.1.22 · Windows x64 开发试用版", 0, 34, 694, 540, 66, 0);
+        control(L"BUTTON", L"刷新所有软件", BS_PUSHBUTTON, 402, 644, 160, 36, 7);
+        status = control(L"STATIC", L"0.1.25 · Windows x64 开发试用版", 0, 34, 694, 540, 66, 0);
         return 0;
     }
     case WM_CTLCOLORSTATIC:
@@ -275,14 +288,9 @@ static LRESULT CALLBACK proc(HWND w, UINT message, WPARAM a, LPARAM b) {
                     explain(L"请先启用新版浮译，再统一更新所有软件。");
                     return 0;
                 }
-                if (MessageBoxW(w,
-                    L"新版已经安装，但运行中的微信、浏览器等仍可能占用旧组件。\n\n请先保存所有文档和网页内容。点击“是”将立即请求重启 Windows，使所有软件统一加载新版。不会强制结束阻止重启的软件。\n\n现在重启吗？",
-                    L"统一更新浮译", MB_YESNO | MB_DEFBUTTON2 | MB_ICONQUESTION) == IDYES) {
-                    wchar_t system[MAX_PATH]{}; GetSystemDirectoryW(system, MAX_PATH);
-                    auto shutdown = fs::path(system) / L"shutdown.exe";
-                    auto result = ShellExecuteW(w, L"open", shutdown.c_str(), L"/r /t 0", nullptr, SW_HIDE);
-                    if ((INT_PTR)result <= 32) explain(L"无法请求重启，请从 Windows 开始菜单手动重启。");
-                }
+                auto activated=activateReleaseForSession();
+                if(FAILED(activated))explain(L"Windows 尚未完成输入配置切换，请稍后重试。",MB_OK|MB_ICONERROR);
+                else PostMessageW(w,WM_APP+2,0,0);
             }
             if (id == 5) {
                 auto p = directory() / L"licenses" / L"TRANSLATION-NOTICE.txt";
@@ -301,12 +309,18 @@ static LRESULT CALLBACK proc(HWND w, UINT message, WPARAM a, LPARAM b) {
             SetWindowTextW(status, L"新版尚未启用，请点击启用浮译完成升级。");
             return 0;
         }
-        if (!busy.exchange(true)) {
+        if(busy.exchange(true))return 0;
+        if(!profile(true)) {
+            busy=false;
+            SetWindowTextW(status,L"新版已安装，但 Windows 输入配置迁移尚未完成，请点击“刷新所有软件”重试。");
+            return 0;
+        }
+        {
             SetWindowTextW(status, L"正在检查旧版占用并清理过期缓存…");
             std::thread([w] {
                 auto result = std::make_unique<std::wstring>();
                 try { *result = maintainUserRuntime(); cleanOldRuntimes(); }
-                catch (...) { *result = L"0.1.22 · 部分缓存仍在使用，下次启动重试"; }
+                catch (...) { *result = L"0.1.25 · 部分缓存仍在使用，下次启动重试"; }
                 if (PostMessageW(w, WM_APP+3, 0, (LPARAM)result.get())) result.release();
             }).detach();
         }
@@ -342,9 +356,21 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR args, int show) {
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     InitCommonControls();
     std::wstring command = args ? args : L"";
+    auto latest=latestInstalledRuntime();
+    if(!latest.empty() && olderRuntimeVersion(runtimeVersion,latest.filename().wstring())) {
+        DWORD code=1;
+        bool forwarded=run(latest/L"FuyiSettings.exe",command,false,&code,!command.empty());
+        CoUninitialize();return forwarded?(int)code:1;
+    }
     if (command == L"--refresh-profile") { bool ok=profile(true);CoUninitialize();return ok?0:1; }
+    // Recovery from an already resident, faulty pre-0.1.25 dispatcher: stage
+    // the login update without deactivating those modules in live applications.
+    if (command == L"--prepare-startup") { bool ok=registerStartupMaintenance();CoUninitialize();return ok?0:1; }
     if (command == L"--maintain") {
-        try { maintainUserRuntime(); cleanOldRuntimes(); }
+        try {
+            if(registeredRuntime().filename()!=runtimeVersion || !profile(true)){CoUninitialize();return 1;}
+            maintainUserRuntime(); cleanOldRuntimes();
+        }
         catch (...) { CoUninitialize(); return 1; }
         CoUninitialize(); return 0;
     }

@@ -2,10 +2,17 @@
 #include "../src/EnglishProofreader.h"
 #include "../src/PanelLayout.h"
 #include "../src/CandidateRanking.h"
+#include "../src/Ids.h"
 #include <cassert>
 #include <iostream>
 using namespace fuyi;
 int main() {
+    assert(IsEqualGUID(serviceForVersion(runtimeVersion),serviceId));
+    assert(!IsEqualGUID(serviceId,legacyServiceId));
+    assert(!IsEqualGUID(serviceForVersion(L"0.1.22"),serviceForVersion(L"0.1.23")));
+    assert(!IsEqualGUID(serviceForVersion(L"0.1.255"),serviceForVersion(L"0.1.256")));
+    assert(!IsEqualGUID(serviceForVersion(L"0.1.23.1"),serviceForVersion(L"0.1.23.2")));
+    assert(isFuyiService(legacyServiceId) && isFuyiService(serviceId) && !isFuyiService(barId));
     assert(olderRuntimeVersion(L"0.1.9", L"0.1.11"));
     assert(olderRuntimeVersion(L"0.1.10", L"0.1.11"));
     assert(!olderRuntimeVersion(L"0.1.11", L"0.1.11"));

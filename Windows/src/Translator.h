@@ -83,7 +83,7 @@ class Translator {
         Ort::InitApi(api);
         auto model = std::make_unique<TranslationModel>();
         model->load(toChinese ? directory() / L"models" / L"en-zh" : directory() / L"models",
-                    directory() / L"ortextensions.dll", toChinese);
+                    nativeDirectory() / L"ortextensions.dll", toChinese);
         selected = std::move(model);
     }
     std::wstring translate(const std::wstring &source, const std::function<bool()> &cancelled, bool toChinese = false) {

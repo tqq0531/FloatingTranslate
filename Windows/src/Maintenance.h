@@ -5,7 +5,6 @@
 #include <tlhelp32.h>
 #include <set>
 namespace fuyi {
-inline constexpr const wchar_t *runtimeVersion = L"0.1.22";
 inline fs::path registeredRuntime() {
     HKEY key = nullptr;
     auto name = L"SOFTWARE\\Classes\\CLSID\\" + guidText(serviceId) + L"\\InprocServer32";
@@ -40,6 +39,7 @@ inline std::vector<RuntimeUser> runtimeUsers(bool *complete = nullptr) {
         MODULEENTRY32W item{sizeof(item)};
         for (BOOL next = Module32FirstW(modules, &item); next; next = Module32NextW(modules, &item)) {
             auto folder = fs::path(item.szExePath).parent_path();
+            if (folder.filename() == L"x86") folder = folder.parent_path();
             if (_wcsicmp(folder.parent_path().c_str(), root.c_str()) == 0 &&
                 std::none_of(found.begin(), found.end(), [&](const auto &user) {
                     return user.pid == process.th32ProcessID && _wcsicmp(user.folder.c_str(), folder.c_str()) == 0;
@@ -67,6 +67,18 @@ inline bool noLinks(const fs::path &path) {
     }
     return true;
 }
+inline fs::path latestInstalledRuntime() {
+    HKEY key=nullptr;
+    if(RegOpenKeyExW(HKEY_LOCAL_MACHINE,L"SOFTWARE\\FloatingTranslate",0,KEY_READ|KEY_WOW64_64KEY,&key)!=ERROR_SUCCESS)return {};
+    wchar_t value[32768]{};DWORD size=sizeof(value),type=0;
+    auto status=RegQueryValueExW(key,L"CurrentDirectory",nullptr,&type,(BYTE*)value,&size);RegCloseKey(key);
+    if(status!=ERROR_SUCCESS || type!=REG_SZ || size>=sizeof(value))return {};
+    auto path=fs::path(value),root=knownFolder(FOLDERID_ProgramFiles)/L"FloatingTranslate";
+    if(_wcsicmp(path.parent_path().c_str(),root.c_str()) || !runtimeVersionParts(path.filename().wstring()) || !noLinks(path))return {};
+    std::error_code ec;
+    if(!fs::is_regular_file(path/L"FuyiSettings.exe",ec) || !fs::is_regular_file(path/L"FuyiIME.dll",ec) || !fs::is_regular_file(path/L"SHA256SUMS.txt",ec))return {};
+    return path;
+}
 inline size_t cleanOldRuntimes() {
     auto root = knownFolder(FOLDERID_ProgramFiles) / L"FloatingTranslate";
     auto registered = registeredRuntime();
@@ -91,15 +103,31 @@ inline size_t cleanOldRuntimes() {
     }
     return removed;
 }
+inline bool plainCacheDirectory(const fs::path &path) {
+    auto attributes=GetFileAttributesW(path.c_str());
+    return attributes!=INVALID_FILE_ATTRIBUTES && (attributes&FILE_ATTRIBUTE_DIRECTORY) && !(attributes&FILE_ATTRIBUTE_REPARSE_POINT);
+}
+inline std::vector<fs::path> sandboxCacheRoots(const fs::path &packages) {
+    std::vector<fs::path> roots;
+    if(!plainCacheDirectory(packages))return roots;
+    std::error_code ec;
+    for(fs::directory_iterator it(packages,ec),end;!ec && it!=end;it.increment(ec)) {
+        auto package=it->path();if(!plainCacheDirectory(package))continue;
+        if(plainCacheDirectory(package/L"TempState"))roots.push_back(package/L"TempState");
+        if(!plainCacheDirectory(package/L"AC"))continue;
+        for(auto child:{L"Temp",L"TempState"})if(plainCacheDirectory(package/L"AC"/child))roots.push_back(package/L"AC"/child);
+    }
+    return roots;
+}
 inline size_t cleanRimeCaches(const std::vector<fs::path> &testRoots = {}) {
     wchar_t temp[32768]{};
     std::vector<fs::path> roots;
     DWORD n = GetTempPathW(32768, temp);
     if (n && n < 32768) roots.emplace_back(temp);
-    auto search = knownFolder(FOLDERID_LocalAppData)/L"Packages"/L"Microsoft.Windows.Search_cw5n1h2txyewy";
-    roots.push_back(search/L"TempState"); roots.push_back(search/L"AC"/L"Temp");
-    roots.push_back(search/L"AC"/L"TempState");
-    if (!testRoots.empty()) roots = testRoots;
+    if(testRoots.empty()) {
+        auto sandbox=sandboxCacheRoots(knownFolder(FOLDERID_LocalAppData)/L"Packages");
+        roots.insert(roots.end(),sandbox.begin(),sandbox.end());
+    } else roots=testRoots;
     size_t removed = 0;
     for (auto &root : roots) {
         std::error_code ec;
@@ -133,9 +161,11 @@ inline std::wstring maintainUserRuntime() {
     auto registered = registeredRuntime();
     std::wstring reopen;
     std::vector<std::wstring> names;
-    for (auto &user : runtimeUsers()) {
+    auto users=runtimeUsers();
+    for (auto &user : users) {
         if (user.session != session || user.pid == GetCurrentProcessId() ||
             !olderRuntimeVersion(user.folder.filename().wstring(), runtimeVersion)) continue;
+        if(std::any_of(users.begin(),users.end(),[&](const auto &current){return current.pid==user.pid && current.folder.filename()==runtimeVersion;}))continue;
         bool search = _wcsicmp(user.name.c_str(), L"SearchApp.exe") == 0 ||
                       _wcsicmp(user.name.c_str(), L"SearchHost.exe") == 0 || _wcsicmp(user.name.c_str(), L"SearchUI.exe") == 0;
         bool refreshed = false;
@@ -168,6 +198,7 @@ inline std::wstring maintainUserRuntime() {
         }
     }
     cleanRimeCaches();
-    return reopen.empty() ? L"0.1.22 · 已检查更新和过期临时缓存" : L"0.1.22 已安装，等待重启统一生效。\n仍用旧版：" + reopen + L"\n保存后点击“统一更新所有软件”。";
+    return std::wstring(runtimeVersion)+L" · 启动维护完成，过期浮译缓存已检查。\n新版输入配置已启用；软件在下一次使用浮译时加载新版。"+
+        (reopen.empty()?L"":L"\n部分旧模块仍驻留，退出软件后自动释放。");
 }
 } // namespace fuyi

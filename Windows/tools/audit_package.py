@@ -34,6 +34,8 @@ def audit(path):
   names=set(z.namelist());root='FloatingTranslate/'
   required=['FuyiIME.dll','FuyiSettings.exe','FuyiCheck.exe','FuyiCoreTest.exe','librime.dll','onnxruntime.dll','ortextensions.dll','vc_redist.x64.exe','启用浮译.cmd','停用浮译.cmd','使用说明.txt','RimeData/build/fuyi.schema.yaml','RimeData/build/pinyin_simp.table.bin','licenses/CC-BY-4.0.txt','licenses/TRANSLATION-NOTICE.txt','licenses/OPUS-MT-EN-ZH-APACHE-2.0.txt','licenses/OPUS-MT-EN-ZH-NOTICE.txt','licenses/FREQUENCYWORDS-CC-BY-SA-4.0.txt','licenses/FREQUENCYWORDS-NOTICE.txt','Proofreading/en_50k.txt','检查搜索框权限.cmd','刷新Windows搜索.cmd']
   required.append('licenses/CPPWINRT-MIT-LICENSE.txt')
+  required += ['vc_redist.x86.exe','licenses/ONNX-X86-LICENSE','licenses/ONNX-X86-ThirdPartyNotices.txt']
+  required += ['x86/'+name for name in ['FuyiIME.dll','FuyiCheck.exe','librime.dll','onnxruntime.dll','onnxruntime_providers_shared.dll','ortextensions.dll']]
   for name in required:assert root+name in names,'Missing '+name
   sums=z.read(root+'SHA256SUMS.txt').decode().splitlines()
   for line in sums:
@@ -48,12 +50,12 @@ def audit(path):
   system={'d3d11.dll','d2d1.dll','combase.dll','gdiplus.dll','kernel32.dll','user32.dll','advapi32.dll','ole32.dll','oleaut32.dll','gdi32.dll','shell32.dll','bcrypt.dll','comctl32.dll','dbghelp.dll','setupapi.dll','dxgi.dll','windowscodecs.dll','ntdll.dll','ucrtbase.dll','msvcrt.dll','version.dll','shlwapi.dll','crypt32.dll'}
   included={pathlib.PurePosixPath(name).name.lower() for name in names}
   for name in sorted(names):
-   if not name.lower().endswith(('.exe','.dll')) or name.endswith('vc_redist.x64.exe'):continue
-   machine,imports,exports=pe(z.read(name));assert machine==0x8664,'Wrong architecture: '+name
+   if not name.lower().endswith(('.exe','.dll')) or pathlib.PurePosixPath(name).name in {'vc_redist.x64.exe','vc_redist.x86.exe'}:continue
+   machine,imports,exports=pe(z.read(name));assert machine==(0x14c if '/x86/' in name else 0x8664),'Wrong architecture: '+name
    for dependency in imports:
     d=dependency.lower();assert d not in {'winhttp.dll','wininet.dll','ws2_32.dll','urlmon.dll'},'Network dependency: '+name
     assert d in system or d in included or d.startswith(('api-ms-win-','ext-ms-win-','msvcp140','vcruntime140')),'Missing native dependency: '+dependency
    if name.endswith('FuyiIME.dll'):assert set(exports)=={'DllGetClassObject','DllCanUnloadNow','DllRegisterServer','DllUnregisterServer'}
-  print('ZIP CRC,',len(sums),'file checksums,',10,'bidirectional model files, x64 PE/TSF exports and native dependencies passed.')
+  print('ZIP CRC,',len(sums),'file checksums,',10,'bidirectional model files, x64+x86 PE/TSF exports and native dependencies passed.')
 
 if __name__=='__main__':audit(pathlib.Path(sys.argv[1]))

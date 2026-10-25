@@ -26,6 +26,17 @@ run(common+[ROOT/'src/TextService.cpp',ROOT/'src/Registration.cpp',ROOT/'src/Inp
 run(common+[ROOT/'src/Settings.cpp',BUILD/'app.res','-municode','-mwindows','-o',OUT/'FuyiSettings.exe']+libs)
 run(common+[ROOT/'src/Check.cpp',BUILD/'app.res','-municode','-o',OUT/'FuyiCheck.exe']+libs)
 run(common+[ROOT/'tests/core_test.cpp','-o',OUT/'FuyiCoreTest.exe'])
+# A 64-bit Windows desktop can host 32-bit Office/PDF processes. They need
+# a native x86 TIP and dependencies; TSF cannot load the x64 DLL into them.
+x86=OUT/'x86'
+if not (x86/'librime.dll').exists() or not (BUILD/'include-x86/onnxruntime_cxx_api.h').exists() or not (OUT/'vc_redist.x86.exe').exists():
+ run([sys.executable,ROOT/'tools/prepare_x86.py'])
+rc86=TOOL/'i686-w64-mingw32-windres'
+run([rc86,'-i','app.rc','-o',BUILD/'app-x86.res'],cwd=ROOT/'assets')
+common86=[TOOL/'i686-w64-mingw32-clang++']+common[1:]
+common86[1:1]=['-I',BUILD/'include-x86']
+run(common86+[ROOT/'src/TextService.cpp',ROOT/'src/Registration.cpp',ROOT/'src/InputScopeGuids.cpp',ROOT/'assets/FuyiIME.def',BUILD/'app-x86.res','-shared','-o',x86/'FuyiIME.dll']+libs)
+run(common86+[ROOT/'src/Check.cpp',BUILD/'app-x86.res','-municode','-o',x86/'FuyiCheck.exe']+libs)
 if '--test' in sys.argv:
  if sys.platform!='win32':raise RuntimeError('--test requires a Windows host')
  run(common+[ROOT/'tests/runtime_regression.cpp','-municode','-o',BUILD/'runtime_regression.exe']+libs)
@@ -33,6 +44,8 @@ if '--test' in sys.argv:
  run(common+[ROOT/'tests/candidate_ui_test.cpp','-o',BUILD/'candidate_ui_test.exe']+libs)
  run(common+[ROOT/'tests/panel_preview.cpp','-municode','-o',BUILD/'panel_preview.exe']+libs)
  run([BUILD/'panel_preview.exe','--native-check'])
+ run(common86+[ROOT/'tests/panel_preview.cpp','-municode','-o',BUILD/'panel_preview_x86.exe']+libs)
+ run([BUILD/'panel_preview_x86.exe','--native-check'])
  for dpi in [96,120,144,192]:
   run([BUILD/'panel_preview.exe',BUILD/('panel-'+str(dpi)+'.png'),str(dpi)])
   run([BUILD/'panel_preview.exe',BUILD/('panel-glass-'+str(dpi)+'.png'),str(dpi),'glass'])
@@ -40,6 +53,7 @@ if '--test' in sys.argv:
  run([BUILD/'maintenance_test.exe'])
  run([OUT/'FuyiCoreTest.exe'])
  run([OUT/'FuyiCheck.exe'])
+ run([x86/'FuyiCheck.exe'])
  run([BUILD/'runtime_regression.exe',OUT/'FuyiIME.dll'])
 # Keep user-facing docs in step with the build, including pre-staged bundles.
 import shutil
@@ -48,7 +62,7 @@ for source,name in [('README.md','开发与隐私说明.md'),('TESTING.md','测�
 # Checksums of every delivered file; no last-minute downloads on the user's PC.
 files=sorted(p for p in OUT.rglob('*') if p.is_file() and p.name!='SHA256SUMS.txt')
 (OUT/'SHA256SUMS.txt').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.relative_to(OUT).as_posix()+'\n' for p in files),encoding='utf-8')
-zip_path=BUILD/'FloatingTranslate-Windows-0.1.22-x64-offline.zip'
+zip_path=BUILD/'FloatingTranslate-Windows-0.1.25-x64-offline.zip'
 with zipfile.ZipFile(zip_path,'w',zipfile.ZIP_DEFLATED,compresslevel=6) as z:
  for p in sorted(OUT.rglob('*')):
   if p.is_file():z.write(p,'FloatingTranslate/'+p.relative_to(OUT).as_posix())

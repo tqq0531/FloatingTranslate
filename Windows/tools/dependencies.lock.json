@@ -33,5 +33,25 @@
     "file": "mingw-notices.txt",
     "url": "https://raw.githubusercontent.com/mstorsjo/llvm-mingw/20261006/LICENSE.txt",
     "sha256": "8e5db0129069005be2a07be3297e198888fd72fad62a13a611504660c6b7e3c7"
+  },
+  "onnxruntime_x86": {
+    "file": "ort-x86.nupkg",
+    "url": "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/1.20.1/microsoft.ml.onnxruntime.1.20.1.nupkg",
+    "sha256": "9c32108e9a1c78b090a95c2a219f244dd5f067d4caf68fb0f967103f3f20839c"
+  },
+  "rime_x86": {
+    "file": "rime-x86.7z",
+    "url": "https://github.com/rime/librime/releases/download/1.17.0/rime-33e7814-Windows-msvc-x86.7z",
+    "sha256": "af235c26c06152ce09ceb8fe9d9ab9fba7ab43ce30aa952b40174d806f5cc3d9"
+  },
+  "vc_redist_x86": {
+    "file": "vc_redist.x86.exe",
+    "url": "https://aka.ms/vs/17/release/vc_redist.x86.exe",
+    "sha256": "0c09f2611660441084ce0df425c51c11e147e6447963c3690f97e0b25c55ed64"
+  },
+  "sevenzip_extractor": {
+    "file": "7zr.exe",
+    "url": "https://www.7-zip.org/a/7zr.exe",
+    "sha256": "256feca8e274e5da655e2a284fabafd9f554365eb164862089dacd4e8276d282"
   }
 }

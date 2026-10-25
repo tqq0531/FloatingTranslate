@@ -40,12 +40,12 @@ inline fs::path installRuntime() {
     // Program Files already permits read/execute from AppContainers. Keep
     // dictionaries and models read-only, with no broad ACL on Desktop/AppData.
     auto root = knownFolder(FOLDERID_ProgramFiles) / L"FloatingTranslate";
-    for (auto p : {root, root / L"0.1.22"}) {
+    for (auto p : {root, root / L"0.1.25"}) {
         if (fs::exists(p) && (GetFileAttributesW(p.c_str()) & FILE_ATTRIBUTE_REPARSE_POINT))
             throw std::runtime_error("Runtime path is a reparse point");
         fs::create_directory(p);
     }
-    auto destination = root / L"0.1.22";
+    auto destination = root / L"0.1.25";
     auto source = directory();
     // Never privatize or partially overwrite a registered runtime while an
     // application still has different bytes from that same version loaded.

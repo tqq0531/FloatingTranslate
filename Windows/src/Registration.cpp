@@ -41,7 +41,7 @@ HRESULT unregisterService() {
     return result;
 }
 HRESULT registerService() {
-    auto dll = (directory() / L"FuyiIME.dll").wstring();
+    auto dll = (nativeDirectory() / L"FuyiIME.dll").wstring();
     auto base = L"SOFTWARE\\Classes\\CLSID\\" + guidText(serviceId);
     auto hr = writeKey(base, nullptr, L"浮译离线输入法");
     if (SUCCEEDED(hr))
@@ -71,6 +71,9 @@ HRESULT registerService() {
         }
     }
     release(categories);
+#ifdef _WIN64
+    if(SUCCEEDED(hr))hr=writeKey(L"SOFTWARE\\FloatingTranslate",L"CurrentDirectory",directory().wstring());
+#endif
     if (FAILED(hr))
         unregisterService();
     return hr;

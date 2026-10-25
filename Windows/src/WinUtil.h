@@ -47,12 +47,19 @@ inline std::string utf8(const std::wstring &value) {
                         nullptr, nullptr);
     return out;
 }
-inline fs::path directory() {
+inline fs::path nativeDirectory() {
     std::vector<wchar_t> path(32768);
     DWORD n = GetModuleFileNameW(module, path.data(), (DWORD)path.size());
     if (!n || n >= path.size())
         throw std::runtime_error("Module path unavailable");
     return fs::path(std::wstring(path.data(), n)).parent_path();
+}
+inline fs::path directory() {
+    auto path = nativeDirectory();
+#ifndef _WIN64
+    if (path.filename() == L"x86") return path.parent_path();
+#endif
+    return path;
 }
 inline fs::path configPath() {
     auto shared = sharedPreferencesRoot() / userSid();
@@ -129,7 +136,7 @@ inline DWORD clipboard(HWND owner, const std::wstring &text) {
     return error;
 }
 inline HMODULE loadLocal(const wchar_t *name) {
-    auto p = directory() / name;
+    auto p = nativeDirectory() / name;
     return LoadLibraryExW(p.c_str(), nullptr,
                           LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
 }
