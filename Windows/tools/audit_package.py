@@ -44,7 +44,7 @@ def audit(path):
    assert len(models['files'])==5,'Incomplete model bundle'
    for item in models['files']:
     data=z.read(root+model_dir+item['file']);assert len(data)==item['bytes'] and hashlib.sha256(data).hexdigest()==item['sha256']
-  system={'kernel32.dll','user32.dll','advapi32.dll','ole32.dll','oleaut32.dll','gdi32.dll','shell32.dll','bcrypt.dll','comctl32.dll','dbghelp.dll','setupapi.dll','dxgi.dll','windowscodecs.dll','ntdll.dll','ucrtbase.dll','msvcrt.dll','version.dll','shlwapi.dll','crypt32.dll'}
+  system={'gdiplus.dll','kernel32.dll','user32.dll','advapi32.dll','ole32.dll','oleaut32.dll','gdi32.dll','shell32.dll','bcrypt.dll','comctl32.dll','dbghelp.dll','setupapi.dll','dxgi.dll','windowscodecs.dll','ntdll.dll','ucrtbase.dll','msvcrt.dll','version.dll','shlwapi.dll','crypt32.dll'}
   included={pathlib.PurePosixPath(name).name.lower() for name in names}
   for name in sorted(names):
    if not name.lower().endswith(('.exe','.dll')) or name.endswith('vc_redist.x64.exe'):continue

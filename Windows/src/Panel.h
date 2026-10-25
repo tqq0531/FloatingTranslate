@@ -2,8 +2,10 @@
 #include "Core.h"
 #include "PanelLayout.h"
 #include "WinUtil.h"
+#include "Glass.h"
 #include <windowsx.h>
 #include <commctrl.h>
+#include <gdiplus.h>
 namespace fuyi {
 // TSF runs inside hosts with different DPI awareness. Draw the popup at its
 // monitor's physical resolution rather than letting Windows scale a bitmap.
@@ -14,7 +16,12 @@ struct PanelDpiScope {
     ~PanelDpiScope() { if (set && previous) set(previous); }
 };
 class Panel {
+#ifdef FUYI_PANEL_PREVIEW
+    friend struct PanelPreview;
+#endif
     HWND window_ = nullptr, tooltip_ = nullptr, owner_ = nullptr;
+    ULONG_PTR graphicsToken_ = 0;
+    bool glass_ = false;
     std::wstring pendingCopy_, copyTip_ = L"复制译文";
     int copyState_ = 0, copyAttempts_ = 0;
     DWORD copyError_ = ERROR_SUCCESS;
@@ -136,6 +143,26 @@ class Panel {
     }
     void surface(HDC dc, const RECT &rect, int diameter, COLORREF top, COLORREF bottom,
                  COLORREF outline = CLR_INVALID) {
+        if (graphicsToken_) {
+            Gdiplus::Graphics graphics(dc);
+            graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+            const float inset=0.75f;
+            float x=rect.left+inset,y=rect.top+inset;
+            float w=rect.right-rect.left-2*inset,h=rect.bottom-rect.top-2*inset;
+            float arc=std::min<float>(diameter,std::min(w,h));
+            if(w<=0 || h<=0)return;
+            Gdiplus::GraphicsPath path;
+            path.AddArc(x,y,arc,arc,180,90);
+            path.AddArc(x+w-arc,y,arc,arc,270,90);
+            path.AddArc(x+w-arc,y+h-arc,arc,arc,0,90);
+            path.AddArc(x,y+h-arc,arc,arc,90,90);
+            path.CloseFigure();
+            auto color=[](COLORREF c){return Gdiplus::Color(255,GetRValue(c),GetGValue(c),GetBValue(c));};
+            Gdiplus::LinearGradientBrush fill(Gdiplus::PointF(x,y),Gdiplus::PointF(x,y+h),color(top),color(bottom));
+            graphics.FillPath(&fill,&path);
+            if(outline!=CLR_INVALID){Gdiplus::Pen pen(color(outline),std::max(1.0f,scale_/96.0f));graphics.DrawPath(&pen,&path);}
+            return;
+        }
         int saved = SaveDC(dc);
         HRGN shape = CreateRoundRectRgn(rect.left, rect.top, rect.right + 1, rect.bottom + 1, diameter, diameter);
         ExtSelectClipRgn(dc, shape, RGN_AND); DeleteObject(shape);
@@ -160,23 +187,129 @@ class Panel {
             DeleteObject(brush); DeleteObject(border);
         }
     }
-    void paint() {
-        PAINTSTRUCT ps;
-        HDC dc = BeginPaint(window_, &ps);
-        RECT client; GetClientRect(window_, &client);
+    std::unique_ptr<Gdiplus::Bitmap> glassImage(HDC dc) {
+        // Draw into an explicit premultiplied-alpha surface. Making the whole
+        // HWND translucent would also fade the text and selection; ordinary
+        // GDI painting would overwrite the alpha needed by the DWM backdrop.
+        auto result = std::make_unique<Gdiplus::Bitmap>(width_, height_, PixelFormat32bppPARGB);
+        auto &image = *result;
+        {
+            Gdiplus::Graphics g(&image);
+            g.Clear(Gdiplus::Color(0, 0, 0, 0));
+            g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+            g.SetTextRenderingHint(Gdiplus::TextRenderingHintAntiAliasGridFit);
+            auto rounded = [&](const RECT &r, float radius, Gdiplus::Color top, Gdiplus::Color bottom,
+                               Gdiplus::Color stroke) {
+                float x=r.left+0.75f, y=r.top+0.75f;
+                float w=r.right-r.left-1.5f, h=r.bottom-r.top-1.5f;
+                float arc=std::min(radius*2, std::min(w,h));
+                if(w<=0 || h<=0)return;
+                Gdiplus::GraphicsPath path;
+                path.AddArc(x,y,arc,arc,180,90); path.AddArc(x+w-arc,y,arc,arc,270,90);
+                path.AddArc(x+w-arc,y+h-arc,arc,arc,0,90); path.AddArc(x,y+h-arc,arc,arc,90,90);
+                path.CloseFigure();
+                Gdiplus::LinearGradientBrush brush(Gdiplus::PointF(x,y),Gdiplus::PointF(x,y+h),top,bottom);
+                g.FillPath(&brush,&path);
+                Gdiplus::Pen pen(stroke, std::max(1.0f,scale_/96.0f)); g.DrawPath(&pen,&path);
+            };
+            RECT card{0,0,width_,height_};
+            rounded(card, d(16), Gdiplus::Color(40,70,73,82), Gdiplus::Color(20,31,34,42),
+                    Gdiplus::Color(110,210,217,232));
+            Gdiplus::Font english(dc,font_), small(dc,small_), candidate(dc,candidateFont_);
+            Gdiplus::StringFormat format(Gdiplus::StringFormat::GenericTypographic());
+            format.SetFormatFlags(format.GetFormatFlags() | Gdiplus::StringFormatFlagsNoWrap |
+                                  Gdiplus::StringFormatFlagsMeasureTrailingSpaces);
+            auto text = [&](const std::wstring &value, const Gdiplus::Font &font, float x, float y, Gdiplus::Color color) {
+                Gdiplus::SolidBrush brush(color);
+                g.DrawString(value.data(), (INT)value.size(), &font, Gdiplus::PointF(x,y), &format, &brush);
+            };
+            g.SetClip(Gdiplus::Rect(d(3),d(3),width_-d(6),height_-d(6)));
+            text(toChinese_?L"中":L"EN",small,d(11),d(12)-scroll_,Gdiplus::Color(255,166,174,189));
+            auto &display=english_.empty()?status_:english_;
+            size_t lo=std::min(selA_,selB_),hi=std::max(selA_,selB_);
+            for(auto &line:lines_) {
+                int y=line.rect.top-scroll_;
+                auto value=display.substr(line.start,line.length);
+                text(value,english,line.rect.left,y,english_.empty()?Gdiplus::Color(255,163,170,183):Gdiplus::Color(255,246,248,252));
+                if(!english_.empty() && hi>line.start && lo<line.start+line.length) {
+                    size_t a=std::max(lo,line.start),b=std::min(hi,line.start+line.length);
+                    auto old=SelectObject(dc,font_); SIZE prefix{},part{};
+                    GetTextExtentPoint32W(dc,english_.data()+line.start,(int)(a-line.start),&prefix);
+                    GetTextExtentPoint32W(dc,english_.data()+a,(int)(b-a),&part); SelectObject(dc,old);
+                    Gdiplus::Rect selected(line.rect.left+prefix.cx,y,part.cx,line.rect.bottom-line.rect.top);
+                    Gdiplus::SolidBrush brush(Gdiplus::Color(255,20,115,240)); g.FillRectangle(&brush,selected);
+                    auto state=g.Save(); g.SetClip(selected,Gdiplus::CombineModeIntersect);
+                    text(value,english,line.rect.left,y,Gdiplus::Color(255,255,255,255)); g.Restore(state);
+                }
+            }
+            if(layout_.divider) {
+                Gdiplus::Pen divider(Gdiplus::Color(45,225,232,245),1);
+                g.DrawLine(&divider,d(12),layout_.divider-scroll_,width_-d(12),layout_.divider-scroll_);
+            }
+            for(auto &choice:layout_.choices) {
+                auto r=choice.rect; RECT box{r.left,r.top-scroll_,r.right,r.bottom-scroll_};
+                bool selected=choice.index==selected_;
+                if(selected)rounded(box,d(18),Gdiplus::Color(255,42,144,255),Gdiplus::Color(255,10,111,239),Gdiplus::Color(255,100,183,255));
+                text(std::to_wstring(choice.index%5+1),small,r.left+d(7),r.top+d(11)-scroll_,
+                     selected?Gdiplus::Color(255,240,248,255):Gdiplus::Color(255,157,168,185));
+                for(auto &line:choice.lines)
+                    text(candidates_[choice.index].text.substr(line.start,line.length),candidate,line.rect.left,line.rect.top-scroll_,Gdiplus::Color(255,247,249,253));
+            }
+            if(!correction_.empty()) {
+                auto proof=L"基础纠错建议: "+correction_;
+                for(auto &line:proofLines_)text(proof.substr(line.start,line.length),english,line.rect.left,line.rect.top-scroll_,Gdiplus::Color(255,184,213,255));
+                for(auto item:{std::pair<RECT,const wchar_t*>{applyRect_,L"采用建议"},{proofCopyRect_,L"复制建议"}}) {
+                    auto r=item.first;OffsetRect(&r,0,-scroll_);
+                    rounded(r,d(5),Gdiplus::Color(160,67,80,105),Gdiplus::Color(160,49,64,88),Gdiplus::Color(80,145,174,213));
+                    Gdiplus::StringFormat centered; centered.SetAlignment(Gdiplus::StringAlignmentCenter);centered.SetLineAlignment(Gdiplus::StringAlignmentCenter);
+                    Gdiplus::SolidBrush ink(Gdiplus::Color(255,225,238,255));
+                    g.DrawString(item.second,-1,&english,Gdiplus::RectF(r.left,r.top,r.right-r.left,r.bottom-r.top),&centered,&ink);
+                }
+            }
+            if(copyHover_)rounded(copy_,d(5),Gdiplus::Color(90,140,155,181),Gdiplus::Color(60,100,115,144),Gdiplus::Color(0,0,0,0));
+            Gdiplus::Pen copyPen(copyState_==1?Gdiplus::Color(255,98,219,166):copyState_==2?Gdiplus::Color(255,255,135,128):Gdiplus::Color(255,185,197,215),std::max(1.0f,scale_/96.0f));
+            g.DrawRectangle(&copyPen,Gdiplus::Rect(copy_.left+d(8),copy_.top+d(3),copy_.right-copy_.left-d(12),copy_.bottom-copy_.top-d(10)));
+            g.DrawRectangle(&copyPen,Gdiplus::Rect(copy_.left+d(4),copy_.top+d(7),copy_.right-copy_.left-d(12),copy_.bottom-copy_.top-d(10)));
+            if(layout_.contentHeight>height_) {
+                int track=height_-d(20),thumb=std::max(d(18),track*height_/layout_.contentHeight);
+                int top=d(10)+(track-thumb)*scroll_/(layout_.contentHeight-height_);
+                Gdiplus::SolidBrush brush(Gdiplus::Color(150,190,202,222));g.FillRectangle(&brush,width_-d(5),top,d(2),thumb);
+            }
+        }
+        return result;
+    }
+    void renderGlass(HDC dc) {
+        auto rendered = glassImage(dc);
+        auto &image = *rendered;
+        Gdiplus::BitmapData data{};Gdiplus::Rect rect(0,0,width_,height_);
+        if(image.LockBits(&rect,Gdiplus::ImageLockModeRead,PixelFormat32bppPARGB,&data)!=Gdiplus::Ok)return;
+        BITMAPINFO info{};info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);
+        info.bmiHeader.biWidth=width_;info.bmiHeader.biHeight=-height_;info.bmiHeader.biPlanes=1;info.bmiHeader.biBitCount=32;
+        void *pixels=nullptr;HBITMAP bitmap=CreateDIBSection(dc,&info,DIB_RGB_COLORS,&pixels,nullptr,0);
+        if(bitmap) {
+            for(int y=0;y<height_;++y)memcpy((BYTE*)pixels+y*width_*4,(BYTE*)data.Scan0+y*data.Stride,width_*4);
+            HDC source=CreateCompatibleDC(dc);auto old=SelectObject(source,bitmap);
+            BitBlt(dc,0,0,width_,height_,source,0,0,SRCCOPY);
+            SelectObject(source,old);DeleteDC(source);DeleteObject(bitmap);
+        }
+        image.UnlockBits(&data);
+    }
+    void render(HDC dc) {
+        if(glass_ && graphicsToken_){renderGlass(dc);return;}
+        RECT client{0, 0, width_, height_};
         HDC back = CreateCompatibleDC(dc);
         HBITMAP bitmap = CreateCompatibleBitmap(dc, width_, height_);
         auto oldBitmap = SelectObject(back, bitmap);
-        HBRUSH transparent = CreateSolidBrush(RGB(1, 2, 3));
+        HBRUSH transparent = CreateSolidBrush(RGB(38, 39, 43));
         FillRect(back, &client, transparent); DeleteObject(transparent);
         RECT card = {0, 0, width_, height_};
-        surface(back, card, d(PanelStyle::cornerDiameter), RGB(247, 248, 250), RGB(247, 248, 250),
-                RGB(112, 124, 141));
+        surface(back, card, d(PanelStyle::cornerDiameter), RGB(49, 50, 55), RGB(37, 38, 42),
+                RGB(89, 91, 99));
         // Keep content inside the solid border without repainting its pixels.
         HRGN clip = CreateRoundRectRgn(d(2), d(2), width_ - d(2) + 1, height_ - d(2) + 1, d(PanelStyle::cornerDiameter) - d(4), d(PanelStyle::cornerDiameter) - d(4));
         SelectClipRgn(back, clip); DeleteObject(clip);
         SetBkMode(back, TRANSPARENT);
-        SelectObject(back, small_); SetTextColor(back, RGB(133, 140, 150));
+        SelectObject(back, small_); SetTextColor(back, RGB(153, 156, 166));
         TextOutW(back, d(11), d(12) - scroll_, toChinese_ ? L"中" : L"EN", toChinese_ ? 1 : 2);
         SelectObject(back, font_);
         const auto &text = english_.empty() ? status_ : english_;
@@ -184,7 +317,7 @@ class Panel {
         for (auto &line : lines_) {
             int y = line.rect.top - scroll_;
             if (line.rect.bottom - scroll_ < 0 || y >= height_) continue;
-            SetTextColor(back, english_.empty() ? RGB(130, 137, 147) : RGB(49, 54, 62));
+            SetTextColor(back, english_.empty() ? RGB(151, 154, 163) : RGB(244, 245, 248));
             TextOutW(back, line.rect.left, y, text.data() + line.start, (int)line.length);
             if (!english_.empty() && hi > line.start && lo < line.start + line.length) {
                 size_t a = std::max(lo, line.start), b = std::min(hi, line.start + line.length);
@@ -198,7 +331,7 @@ class Panel {
             }
         }
         if (layout_.divider) {
-            auto divider = CreatePen(PS_SOLID, 1, RGB(218, 222, 228));
+            auto divider = CreatePen(PS_SOLID, 1, RGB(67, 69, 77));
             auto prev = SelectObject(back, divider);
             MoveToEx(back, d(8), layout_.divider - scroll_, nullptr);
             LineTo(back, width_ - d(8), layout_.divider - scroll_);
@@ -209,9 +342,9 @@ class Panel {
             if (r.bottom < 0 || r.top >= height_) continue;
             bool active = choice.index == selected_;
             if (active) {
-                surface(back, r, d(12), RGB(0, 112, 232), RGB(0, 112, 232), RGB(0, 76, 173));
+                surface(back, r, d(32), RGB(40, 139, 255), RGB(10, 111, 237), RGB(82, 165, 255));
             }
-            SetTextColor(back, active ? RGB(255, 255, 255) : RGB(70, 76, 86));
+            SetTextColor(back, active ? RGB(255, 255, 255) : RGB(228, 230, 235));
             SelectObject(back, small_);
             auto number = std::to_wstring(choice.index % 5 + 1);
             TextOutW(back, r.left + d(7), r.top + d(11), number.c_str(), (int)number.size());
@@ -222,20 +355,20 @@ class Panel {
         }
         if(!correction_.empty()) {
             const auto proof=L"基础纠错建议: "+correction_;
-            SelectObject(back,font_);SetTextColor(back,RGB(65,104,140));
+            SelectObject(back,font_);SetTextColor(back,RGB(169,197,235));
             for(const auto &line:proofLines_) if(line.rect.bottom-scroll_>0&&line.rect.top-scroll_<height_)
                 TextOutW(back,line.rect.left,line.rect.top-scroll_,proof.data()+line.start,(int)line.length);
             for(auto item:{std::pair<RECT,const wchar_t*>{applyRect_,L"采用建议"},{proofCopyRect_,L"复制建议"}}){
                 auto rect=item.first;OffsetRect(&rect,0,-scroll_);
-                surface(back,rect,d(8),RGB(231,238,247),RGB(222,232,246));
+                surface(back,rect,d(8),RGB(61,70,86),RGB(50,60,77));
                 DrawTextW(back,item.second,-1,&rect,DT_CENTER|DT_VCENTER|DT_SINGLELINE);
             }
         }
         // A compact two-paper copy glyph, like the Mac panel; no wide text button.
         if (copyHover_)
-            surface(back, copy_, d(8), RGB(226, 234, 245), RGB(226, 234, 245));
+            surface(back, copy_, d(8), RGB(63, 66, 75), RGB(55, 58, 66));
         COLORREF ink = copyState_ == 1 ? RGB(37, 145, 100) : copyState_ == 2 ? RGB(194, 77, 66) :
-                       copyHover_ ? RGB(0, 112, 232) : RGB(131, 139, 151);
+                       copyHover_ ? RGB(0, 112, 232) : RGB(174, 180, 192);
         auto paper = CreatePen(PS_SOLID, std::max(1, d(1)), ink);
         auto oldPen = SelectObject(back, paper);
         auto oldBrush = SelectObject(back, GetStockObject(NULL_BRUSH));
@@ -260,7 +393,13 @@ class Panel {
         }
         SelectClipRgn(back, nullptr);
         BitBlt(dc, 0, 0, width_, height_, back, 0, 0, SRCCOPY);
-        SelectObject(back, oldBitmap); DeleteObject(bitmap); DeleteDC(back); EndPaint(window_, &ps);
+        SelectObject(back, oldBitmap); DeleteObject(bitmap); DeleteDC(back);
+    }
+    void paint() {
+        PAINTSTRUCT ps;
+        HDC dc = BeginPaint(window_, &ps);
+        render(dc);
+        EndPaint(window_, &ps);
     }
     LRESULT message(UINT m, WPARAM a, LPARAM b) {
         POINT point = {GET_X_LPARAM(b), GET_Y_LPARAM(b)};
@@ -273,6 +412,11 @@ class Panel {
             return MA_NOACTIVATE;
         case WM_ERASEBKGND:
             return 1;
+        case WM_DWMCOMPOSITIONCHANGED:
+        case WM_SETTINGCHANGE:
+            if(window_)glass_=graphicsToken_ && enableGlass(window_);
+            InvalidateRect(window_,nullptr,FALSE);
+            return 0;
         case WM_PAINT:
             paint();
             return 0;
@@ -394,10 +538,11 @@ class Panel {
         // the corners even in remote desktop compositors.
         // The shell must recognize this as an IME window. An ordinary tool
         // window created inside Search/AppContainer is shell-cloaked.
-        wc.style = CS_IME;
+        wc.style = CS_IME | CS_DROPSHADOW;
         RegisterClassW(&wc);
         CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST, wc.lpszClassName,
                         L"浮译", WS_POPUP, 0, 0, width_, height_, owner_, nullptr, module, this);
+        if(window_)glass_=graphicsToken_ && enableGlass(window_);
         INITCOMMONCONTROLSEX controls = {sizeof(controls), ICC_WIN95_CLASSES};
         InitCommonControlsEx(&controls);
         tooltip_ = CreateWindowExW(WS_EX_TOPMOST | WS_EX_NOACTIVATE, TOOLTIPS_CLASSW, nullptr,
@@ -410,7 +555,11 @@ class Panel {
             SendMessageW(tooltip_, TTM_ADDTOOLW, 0, (LPARAM)&tool);
         }
     }
-    Panel() { fonts(); }
+    Panel() {
+        Gdiplus::GdiplusStartupInput startup;
+        if(Gdiplus::GdiplusStartup(&graphicsToken_, &startup, nullptr)!=Gdiplus::Ok)graphicsToken_=0;
+        fonts();
+    }
     ~Panel() {
         if (tooltip_) DestroyWindow(tooltip_);
         if (window_)
@@ -420,6 +569,7 @@ class Panel {
         if (small_)
             DeleteObject(small_);
         if (candidateFont_) DeleteObject(candidateFont_);
+        if(graphicsToken_)Gdiplus::GdiplusShutdown(graphicsToken_);
     }
     void setOwner(HWND owner) {
         // Use the TSF view's exact HWND, including a hidden CoreText transport

@@ -151,18 +151,40 @@ class TranslationModel {
         auto rank = [](const Beam &b) { return b.score; };
         for (int step = 0; step < 128; ++step) {
             std::vector<Beam> next;
-            for (auto &beam : beams) {
+            std::vector<size_t> active;
+            for (size_t i=0;i<beams.size();++i) {
+                if (beams[i].done) next.push_back(beams[i]);
+                else active.push_back(i);
+            }
+            if (cancelled()) return {};
+            const size_t length=beams[active.front()].tokens.size();
+            std::vector<int64_t> tokenBatch, maskBatch;
+            std::vector<float> hiddenBatch;
+            auto hiddenInfo=hidden[0].GetTensorTypeAndShapeInfo();
+            auto hiddenShape=hiddenInfo.GetShape();
+            size_t hiddenCount=hiddenInfo.GetElementCount();
+            auto hiddenData=hidden[0].GetTensorData<float>();
+            for (auto index:active) {
+                tokenBatch.insert(tokenBatch.end(),beams[index].tokens.begin(),beams[index].tokens.end());
+                maskBatch.insert(maskBatch.end(),mask.begin(),mask.end());
+                hiddenBatch.insert(hiddenBatch.end(),hiddenData,hiddenData+hiddenCount);
+            }
+            int64_t tokenShape[]={(int64_t)active.size(),(int64_t)length};
+            int64_t maskShape[]={(int64_t)active.size(),(int64_t)mask.size()};
+            hiddenShape[0]=(int64_t)active.size();
+            auto batchTokens=Ort::Value::CreateTensor<int64_t>(memory,tokenBatch.data(),tokenBatch.size(),tokenShape,2);
+            auto batchMask=Ort::Value::CreateTensor<int64_t>(memory,maskBatch.data(),maskBatch.size(),maskShape,2);
+            auto batchHidden=Ort::Value::CreateTensor<float>(memory,hiddenBatch.data(),hiddenBatch.size(),hiddenShape.data(),hiddenShape.size());
+            const OrtValue *values[]={batchTokens,batchMask,batchHidden};
+            OrtValue *result=nullptr;
+            Ort::RunOptions run;
+            Ort::ThrowOnError(Ort::GetApi().Run(decoder_,run,di,values,3,dout,1,&result));
+            Ort::Value logits(result);
+            for (size_t batch=0;batch<active.size();++batch) {
                 if (cancelled()) return {};
-                if (beam.done) { next.push_back(beam); continue; }
-                auto &output = beam.tokens;
-                int64_t shape[] = {1, (int64_t)output.size()};
-                auto tokens = Ort::Value::CreateTensor<int64_t>(memory, output.data(), output.size(), shape, 2);
-                const OrtValue *values[] = {tokens, inputs[1], hidden[0]};
-                OrtValue *result = nullptr;
-                Ort::RunOptions run;
-                Ort::ThrowOnError(Ort::GetApi().Run(decoder_, run, di, values, 3, dout, 1, &result));
-                Ort::Value logits(result);
-                auto *scores = logits.GetTensorData<float>() + (output.size()-1)*65001;
+                auto &beam=beams[active[batch]];
+                auto &output=beam.tokens;
+                auto *scores=logits.GetTensorData<float>()+(batch*length+length-1)*65001;
                 double maximum = *std::max_element(scores, scores+65000), sum = 0;
                 for(size_t i=0;i<65000;++i) sum += std::exp(scores[i]-maximum);
                 double normalizer = maximum + std::log(sum);

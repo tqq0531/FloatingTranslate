@@ -221,7 +221,8 @@ static LRESULT CALLBACK proc(HWND w, UINT message, WPARAM a, LPARAM b) {
                 0, 34, 575, 540, 48, 0);
         control(L"BUTTON", L"使用说明", BS_PUSHBUTTON, 34, 644, 160, 36, 4);
         control(L"BUTTON", L"隐私与开源许可", BS_PUSHBUTTON, 208, 644, 180, 36, 5);
-        status = control(L"STATIC", L"0.1.17 · Windows x64 开发试用版", 0, 34, 700, 540, 40, 0);
+        control(L"BUTTON", L"统一更新所有软件", BS_PUSHBUTTON, 402, 644, 160, 36, 7);
+        status = control(L"STATIC", L"0.1.18 · Windows x64 开发试用版", 0, 34, 694, 540, 66, 0);
         return 0;
     }
     case WM_CTLCOLORSTATIC:
@@ -269,6 +270,20 @@ static LRESULT CALLBACK proc(HWND w, UINT message, WPARAM a, LPARAM b) {
                     explain(L"暂时无法清除，请稍后重试。", MB_OK | MB_ICONERROR);
                 }
             }
+            if (id == 7) {
+                if (registeredRuntime().filename() != runtimeVersion) {
+                    explain(L"请先启用新版浮译，再统一更新所有软件。");
+                    return 0;
+                }
+                if (MessageBoxW(w,
+                    L"新版已经安装，但运行中的微信、浏览器等仍可能占用旧组件。\n\n请先保存所有文档和网页内容。点击“是”将立即请求重启 Windows，使所有软件统一加载新版。不会强制结束阻止重启的软件。\n\n现在重启吗？",
+                    L"统一更新浮译", MB_YESNO | MB_DEFBUTTON2 | MB_ICONQUESTION) == IDYES) {
+                    wchar_t system[MAX_PATH]{}; GetSystemDirectoryW(system, MAX_PATH);
+                    auto shutdown = fs::path(system) / L"shutdown.exe";
+                    auto result = ShellExecuteW(w, L"open", shutdown.c_str(), L"/r /t 0", nullptr, SW_HIDE);
+                    if ((INT_PTR)result <= 32) explain(L"无法请求重启，请从 Windows 开始菜单手动重启。");
+                }
+            }
             if (id == 5) {
                 auto p = directory() / L"licenses" / L"TRANSLATION-NOTICE.txt";
                 ShellExecuteW(w, L"open", p.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
@@ -291,7 +306,7 @@ static LRESULT CALLBACK proc(HWND w, UINT message, WPARAM a, LPARAM b) {
             std::thread([w] {
                 auto result = std::make_unique<std::wstring>();
                 try { *result = maintainUserRuntime(); cleanOldRuntimes(); }
-                catch (...) { *result = L"0.1.17 · 部分缓存仍在使用，下次启动重试"; }
+                catch (...) { *result = L"0.1.18 · 部分缓存仍在使用，下次启动重试"; }
                 if (PostMessageW(w, WM_APP+3, 0, (LPARAM)result.get())) result.release();
             }).detach();
         }

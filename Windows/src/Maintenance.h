@@ -5,7 +5,7 @@
 #include <tlhelp32.h>
 #include <set>
 namespace fuyi {
-inline constexpr const wchar_t *runtimeVersion = L"0.1.17";
+inline constexpr const wchar_t *runtimeVersion = L"0.1.18";
 inline fs::path registeredRuntime() {
     HKEY key = nullptr;
     auto name = L"SOFTWARE\\Classes\\CLSID\\" + guidText(serviceId) + L"\\InprocServer32";
@@ -132,6 +132,7 @@ inline std::wstring maintainUserRuntime() {
     DWORD session = 0; ProcessIdToSessionId(GetCurrentProcessId(), &session);
     auto registered = registeredRuntime();
     std::wstring reopen;
+    std::vector<std::wstring> names;
     for (auto &user : runtimeUsers()) {
         if (user.session != session || user.pid == GetCurrentProcessId() ||
             !olderRuntimeVersion(user.folder.filename().wstring(), runtimeVersion)) continue;
@@ -153,11 +154,20 @@ inline std::wstring maintainUserRuntime() {
             }
         }
         if (!refreshed) {
-            if (!reopen.empty()) reopen += L"、";
-            reopen += user.name;
+            auto name = fs::path(user.name).stem().wstring();
+            if (_wcsicmp(user.name.c_str(), L"Weixin.exe") == 0 || _wcsicmp(user.name.c_str(), L"WeChatAppEx.exe") == 0) name=L"微信";
+            if (_wcsicmp(user.name.c_str(), L"chrome.exe") == 0) name=L"Chrome";
+            if (_wcsicmp(user.name.c_str(), L"explorer.exe") == 0) name=L"文件管理器";
+            if (_wcsicmp(user.name.c_str(), L"ApplicationFrameHost.exe") == 0) name=L"Windows 应用";
+            if (_wcsicmp(user.name.c_str(), L"msedgewebview2.exe") == 0) name=L"网页应用";
+            if (std::find(names.begin(), names.end(), name) == names.end()) {
+                names.push_back(name);
+                if (!reopen.empty()) reopen += L"、";
+                reopen += name;
+            }
         }
     }
     cleanRimeCaches();
-    return reopen.empty() ? L"0.1.17 · 已检查更新和过期临时缓存" : L"0.1.17 · 请保存后正常重开：" + reopen;
+    return reopen.empty() ? L"0.1.18 · 已检查更新和过期临时缓存" : L"0.1.18 已安装，等待重启统一生效。\n仍用旧版：" + reopen + L"\n保存后点击“统一更新所有软件”。";
 }
 } // namespace fuyi

@@ -46,5 +46,15 @@ int wmain(int argc, wchar_t **argv) {
         std::cout << utf8(text) << " -> " << utf8(translated) << " (" << ms << " ms)\n";
     }
     assert(model.translate(L"already cancelled", [] { return true; }).empty());
+    auto compound = model.translate(L"I like music. I also like swimming.", [] { return false; }, true);
+    assert(compound.find(L"音乐") != std::wstring::npos && compound.find(L"游泳") != std::wstring::npos);
+    auto name = model.translate(L"Hello, my name is Jack", [] { return false; }, true);
+    assert(name.find(L"你好") != std::wstring::npos && name.find(L"杰克") != std::wstring::npos);
+    int checks = 0;
+    assert(model.translate(L"Please send me the document tomorrow.", [&] { return ++checks > 3; }, true).empty());
+    bool rejected = false;
+    try { model.translate(std::wstring(4000, L'我'), [] { return false; }); }
+    catch (const std::length_error &) { rejected = true; }
+    assert(rejected);
     std::cout << "All candidate pages/consumed lengths, preview and real inference passed\n";
 }
