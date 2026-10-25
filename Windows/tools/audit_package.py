@@ -33,6 +33,7 @@ def audit(path):
   assert z.testzip() is None,'ZIP CRC mismatch'
   names=set(z.namelist());root='FloatingTranslate/'
   required=['FuyiIME.dll','FuyiSettings.exe','FuyiCheck.exe','FuyiCoreTest.exe','librime.dll','onnxruntime.dll','ortextensions.dll','vc_redist.x64.exe','启用浮译.cmd','停用浮译.cmd','使用说明.txt','RimeData/build/fuyi.schema.yaml','RimeData/build/pinyin_simp.table.bin','licenses/CC-BY-4.0.txt','licenses/TRANSLATION-NOTICE.txt','licenses/OPUS-MT-EN-ZH-APACHE-2.0.txt','licenses/OPUS-MT-EN-ZH-NOTICE.txt','licenses/FREQUENCYWORDS-CC-BY-SA-4.0.txt','licenses/FREQUENCYWORDS-NOTICE.txt','Proofreading/en_50k.txt','检查搜索框权限.cmd','刷新Windows搜索.cmd']
+  required.append('licenses/CPPWINRT-MIT-LICENSE.txt')
   for name in required:assert root+name in names,'Missing '+name
   sums=z.read(root+'SHA256SUMS.txt').decode().splitlines()
   for line in sums:
@@ -44,7 +45,7 @@ def audit(path):
    assert len(models['files'])==5,'Incomplete model bundle'
    for item in models['files']:
     data=z.read(root+model_dir+item['file']);assert len(data)==item['bytes'] and hashlib.sha256(data).hexdigest()==item['sha256']
-  system={'gdiplus.dll','kernel32.dll','user32.dll','advapi32.dll','ole32.dll','oleaut32.dll','gdi32.dll','shell32.dll','bcrypt.dll','comctl32.dll','dbghelp.dll','setupapi.dll','dxgi.dll','windowscodecs.dll','ntdll.dll','ucrtbase.dll','msvcrt.dll','version.dll','shlwapi.dll','crypt32.dll'}
+  system={'d3d11.dll','d2d1.dll','combase.dll','gdiplus.dll','kernel32.dll','user32.dll','advapi32.dll','ole32.dll','oleaut32.dll','gdi32.dll','shell32.dll','bcrypt.dll','comctl32.dll','dbghelp.dll','setupapi.dll','dxgi.dll','windowscodecs.dll','ntdll.dll','ucrtbase.dll','msvcrt.dll','version.dll','shlwapi.dll','crypt32.dll'}
   included={pathlib.PurePosixPath(name).name.lower() for name in names}
   for name in sorted(names):
    if not name.lower().endswith(('.exe','.dll')) or name.endswith('vc_redist.x64.exe'):continue

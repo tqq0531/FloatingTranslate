@@ -13,8 +13,9 @@ struct PanelPreview {
         panel.createWindow(); panel.layout(500,300);
         SetWindowPos(panel.window_,nullptr,0,0,panel.width_,panel.height_,SWP_NOACTIVATE|SWP_NOZORDER);
         HDC dc=GetDC(panel.window_); panel.renderGlass(dc); ReleaseDC(panel.window_,dc);
-        assert(panel.layered_);
-        std::cout<<"Native per-pixel surface accepted; backdrop="<<panel.glass_<<"\n";
+        assert(panel.composition_ || panel.layered_);
+        if(panel.composition_)assert(panel.compositionAtCreation_);
+        std::cout<<"Native surface accepted; unified composition="<<(panel.composition_!=nullptr)<<" backdrop="<<panel.glass_<<"\n";
     }
     static void save(const wchar_t *file, int dpi, bool glass) {
         Panel panel;

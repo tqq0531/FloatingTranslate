@@ -3,6 +3,7 @@
 #include "PanelLayout.h"
 #include "WinUtil.h"
 #include "Glass.h"
+#include "CompositionBackdrop.h"
 #include <windowsx.h>
 #include <commctrl.h>
 #include <gdiplus.h>
@@ -23,6 +24,23 @@ class Panel {
     ULONG_PTR graphicsToken_ = 0;
     bool glass_ = false;
     bool layered_ = false;
+    bool compositionAtCreation_ = false;
+    std::unique_ptr<CompositionBackdrop> composition_;
+    HRESULT compositionError_=S_OK;
+    void configureBackdrop() {
+        bool wanted=graphicsToken_ && glassAllowed();
+        if(wanted && composition_)return;
+        composition_.reset();glass_=false;
+        auto style=GetWindowLongPtrW(window_,GWL_EXSTYLE)&~(WS_EX_LAYERED|WS_EX_NOREDIRECTIONBITMAP);
+        if(wanted) {
+            SetWindowLongPtrW(window_,GWL_EXSTYLE,style|WS_EX_NOREDIRECTIONBITMAP);
+            auto candidate=std::make_unique<CompositionBackdrop>();
+            if(candidate->start(window_)){composition_=std::move(candidate);glass_=true;compositionError_=S_OK;}
+            else compositionError_=candidate->error();
+        }
+        layered_=graphicsToken_ && !composition_;
+        if(!composition_)SetWindowLongPtrW(window_,GWL_EXSTYLE,style|(layered_?WS_EX_LAYERED:0));
+    }
     std::wstring pendingCopy_, copyTip_ = L"复制译文";
     int copyState_ = 0, copyAttempts_ = 0;
     DWORD copyError_ = ERROR_SUCCESS;
@@ -76,6 +94,7 @@ class Panel {
         if (m == WM_NCCREATE) {
             self = (Panel *)((CREATESTRUCTW *)b)->lpCreateParams;
             self->window_ = w;
+            self->compositionAtCreation_ = (((CREATESTRUCTW *)b)->dwExStyle & WS_EX_NOREDIRECTIONBITMAP) != 0;
             SetWindowLongPtrW(w, GWLP_USERDATA, (LONG_PTR)self);
         }
         return self ? self->message(m, a, b) : DefWindowProcW(w, m, a, b);
@@ -215,8 +234,8 @@ class Panel {
             };
             RECT card{0,0,width_,height_};
             rounded(card, d(PanelStyle::cornerDiameter/2),
-                    glass_?Gdiplus::Color(40,70,73,82):Gdiplus::Color(255,49,50,55),
-                    glass_?Gdiplus::Color(20,31,34,42):Gdiplus::Color(255,37,38,42),
+                    glass_?Gdiplus::Color(150,42,46,54):Gdiplus::Color(255,49,50,55),
+                    glass_?Gdiplus::Color(145,26,30,38):Gdiplus::Color(255,37,38,42),
                     Gdiplus::Color(85,210,217,232));
             Gdiplus::Font english(dc,font_), small(dc,small_), candidate(dc,candidateFont_);
             Gdiplus::StringFormat format(Gdiplus::StringFormat::GenericTypographic());
@@ -286,6 +305,18 @@ class Panel {
         auto &image = *rendered;
         Gdiplus::BitmapData data{};Gdiplus::Rect rect(0,0,width_,height_);
         if(image.LockBits(&rect,Gdiplus::ImageLockModeRead,PixelFormat32bppPARGB,&data)!=Gdiplus::Ok)return;
+        if(composition_) {
+            bool drawn=composition_->draw(data.Scan0,data.Stride,width_,height_,(float)d(PanelStyle::cornerDiameter/2));
+            image.UnlockBits(&data);
+            if(!drawn) {
+                compositionError_=composition_->error();
+                composition_.reset();glass_=false;layered_=true;
+                auto style=GetWindowLongPtrW(window_,GWL_EXSTYLE);
+                SetWindowLongPtrW(window_,GWL_EXSTYLE,(style&~WS_EX_NOREDIRECTIONBITMAP)|WS_EX_LAYERED);
+                renderGlass(dc);
+            }
+            return;
+        }
         BITMAPINFO info{};info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);
         info.bmiHeader.biWidth=width_;info.bmiHeader.biHeight=-height_;info.bmiHeader.biPlanes=1;info.bmiHeader.biBitCount=32;
         void *pixels=nullptr;HBITMAP bitmap=CreateDIBSection(dc,&info,DIB_RGB_COLORS,&pixels,nullptr,0);
@@ -427,7 +458,7 @@ class Panel {
             return 1;
         case WM_DWMCOMPOSITIONCHANGED:
         case WM_SETTINGCHANGE:
-            if(window_)glass_=graphicsToken_ && enableGlass(window_);
+            if(window_)configureBackdrop();
             InvalidateRect(window_,nullptr,FALSE);
             return 0;
         case WM_PAINT:
@@ -532,6 +563,8 @@ class Panel {
         if (library) FreeLibrary(library);
         return "created="+std::to_string(IsWindow(window_))+" visible="+std::to_string(IsWindowVisible(window_))+
             " ownerExists="+std::to_string(owner!=nullptr)+" ownerVisible="+std::to_string(IsWindowVisible(owner))+
+            " composition="+std::to_string(composition_!=nullptr)+" compositionError="+std::to_string((unsigned)compositionError_)+
+            " compositionAtCreation="+std::to_string(compositionAtCreation_)+
             " cloaked="+std::to_string(cloaked)+" dpi="+std::to_string(scale_)+" rect="+std::to_string(rect.left)+","+
             std::to_string(rect.top)+","+std::to_string(rect.right)+","+std::to_string(rect.bottom)+" work="+
             std::to_string(monitor.rcWork.left)+","+std::to_string(monitor.rcWork.top)+","+
@@ -553,10 +586,13 @@ class Panel {
         // window created inside Search/AppContainer is shell-cloaked.
         wc.style = CS_IME;
         RegisterClassW(&wc);
-        layered_=graphicsToken_!=0;
-        CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST | (layered_?WS_EX_LAYERED:0), wc.lpszClassName,
+        // The compositor must own the surface from creation. Switching this
+        // style after CreateWindowEx can leave the original black HWND bitmap
+        // visible outside the visual tree's rounded clip.
+        CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST |
+                        (graphicsToken_?WS_EX_NOREDIRECTIONBITMAP:0), wc.lpszClassName,
                         L"浮译", WS_POPUP, 0, 0, width_, height_, owner_, nullptr, module, this);
-        if(window_)glass_=graphicsToken_ && enableGlass(window_);
+        if(window_)configureBackdrop();
         INITCOMMONCONTROLSEX controls = {sizeof(controls), ICC_WIN95_CLASSES};
         InitCommonControlsEx(&controls);
         tooltip_ = CreateWindowExW(WS_EX_TOPMOST | WS_EX_NOACTIVATE, TOOLTIPS_CLASSW, nullptr,
@@ -575,6 +611,7 @@ class Panel {
         fonts();
     }
     ~Panel() {
+        composition_.reset();
         if (tooltip_) DestroyWindow(tooltip_);
         if (window_)
             DestroyWindow(window_);
@@ -682,7 +719,7 @@ class Panel {
         }
         // A window region is a one-bit mask: it cuts antialiased pixels into
         // stair steps. A per-pixel surface carries the complete smooth edge.
-        if(layered_) SetWindowRgn(window_,nullptr,FALSE);
+        if(layered_ || composition_) SetWindowRgn(window_,nullptr,FALSE);
         else {
             HRGN shape = CreateRoundRectRgn(0, 0, width_ + 1, height_ + 1, d(PanelStyle::cornerDiameter), d(PanelStyle::cornerDiameter));
             if (shape && !SetWindowRgn(window_, shape, FALSE)) DeleteObject(shape);

@@ -1,4 +1,9 @@
 {
+  "cppwinrt": {
+    "file": "cppwinrt.nupkg",
+    "url": "https://api.nuget.org/v3-flatcontainer/microsoft.windows.cppwinrt/2.0.250303.1/microsoft.windows.cppwinrt.2.0.250303.1.nupkg",
+    "sha256": "955e3051b35db1c00177ed14ab6b7b995c3b32a53fdb6c184ea53b1dba66e439"
+  },
   "onnxruntime": {
     "file": "ort.nupkg",
     "url": "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/1.23.2/microsoft.ml.onnxruntime.1.23.2.nupkg",
