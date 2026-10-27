@@ -9,10 +9,10 @@ import java.util.*;
 public final class PinyinDictionary {
     public record Candidate(String text, int consumed) { }
     private record Word(String text, String code, double weight) { }
-    private final Map<String, List<Word>> full = new HashMap<>(), initials = new HashMap<>();
+    private final Map<String, List<Word>> full = new HashMap<>(), initials = new HashMap<>(), prefixes = new HashMap<>();
     private int maxCode;
-    public PinyinDictionary(Reader input) throws IOException {
-        try (BufferedReader reader = new BufferedReader(input)) {
+    public PinyinDictionary(Reader... inputs) throws IOException {
+        for (Reader input : inputs) try (BufferedReader reader = new BufferedReader(input)) {
             boolean body = false;
             for (String line; (line = reader.readLine()) != null;) {
                 if (!body) { if (line.equals("...")) body = true; continue; }
@@ -25,12 +25,28 @@ public final class PinyinDictionary {
                 double weight = cells.length >= 3 ? Double.parseDouble(cells[2]) : 1;
                 Word word = new Word(cells[0], code, weight);
                 full.computeIfAbsent(code, k -> new ArrayList<>()).add(word);
-                if (syllables.length > 1) initials.computeIfAbsent(shortCode, k -> new ArrayList<>()).add(word);
+                initials.computeIfAbsent(shortCode, k -> new ArrayList<>()).add(word);
+                // Prefixes complete unfinished single syllables: d/de, zh/zhong, sh/shen.
+                if (syllables.length == 1) for (int n=1;n<code.length();n++)
+                    prefixes.computeIfAbsent(code.substring(0,n), k -> new ArrayList<>()).add(word);
+                // Each syllable can be full or initial: nihao, nh, nih, nhao.
+                if (syllables.length > 1 && syllables.length <= 4)
+                    indexMixed(word, syllables, 0, "", code, shortCode);
                 maxCode = Math.max(maxCode, code.length());
             }
         }
         Comparator<Word> order = Comparator.comparingDouble(Word::weight).reversed();
-        for (Map<String,List<Word>> index : List.of(full, initials)) for (List<Word> words : index.values()) words.sort(order);
+        for (Map<String,List<Word>> index : List.of(full, initials, prefixes)) for (List<Word> words : index.values()) words.sort(order);
+    }
+    private void indexMixed(Word word, String[] syllables, int index, String code, String fullCode, String initialsCode) {
+        if (index == syllables.length) {
+            if (!code.equals(fullCode) && !code.equals(initialsCode))
+                initials.computeIfAbsent(code, k -> new ArrayList<>()).add(word);
+            return;
+        }
+        String syllable = syllables[index];
+        indexMixed(word, syllables, index+1, code+syllable, fullCode, initialsCode);
+        if (syllable.length()>1) indexMixed(word, syllables, index+1, code+syllable.charAt(0), fullCode, initialsCode);
     }
     private String clean(String raw) { return raw.toLowerCase(Locale.ROOT).replace("'", ""); }
     private int consumed(String raw, int letters) {
@@ -66,6 +82,7 @@ public final class PinyinDictionary {
         String sentence = complete(raw);
         if (!sentence.isEmpty()) result.put(sentence,new Candidate(sentence,raw.length()));
         add(result,full.get(code),raw.length());
+        add(result,prefixes.get(code),raw.length());
         add(result,initials.get(code),raw.length());
         if (result.isEmpty()) {
             // A common accidental adjacent-letter swap, preserving original keystroke consumption.

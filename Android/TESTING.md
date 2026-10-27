@@ -1,3 +1,11 @@
+## Android 0.1.7 — 2026-10-27
+
+Build, lint and 12 JVM tests passed. Pixel_6 API 36 emulator: 17 of 18 device checks passed in the combined run; the remaining letter-preview check was corrected to inspect pixels (non-touchable popup windows do not expose accessibility nodes) and passed independently. All 18 checks have passed on the same production APK. Cold-start instrumentation now rebinds the IME after an Android 16 client-visibility rejection; production input behavior was not bypassed.
+
+New checks: `d` → 的; `w` → 我; `zh` contains 中; full/initial mixed input; extension dictionary loading; switching basic/extended during input; unchanged key position while candidates appear; press preview above its key and dismissed on release. Existing checks cover translation, clipboard, height and live system light/dark changes.
+
+Screenshots: `docs/keyboard-017-light.png`, `docs/keyboard-017-dark.png`, `docs/keyboard-017-press.png`. Physical-phone typing feel still needs user feedback; the dictionary matcher is not a complete native Rime/Fcitx engine.
+
 # Android 0.1.6 验证 / Validation
 
 在 Mac 的 Pixel 6 Android 16 模拟器（4 KB 页）完成本次验证。安装包内置中英双向模型，测试 APK 不会发给用户。

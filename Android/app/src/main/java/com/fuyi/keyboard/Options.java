@@ -10,6 +10,7 @@ final class Options {
         prefs(c).edit().putBoolean("history", enabled).putLong("historySince", System.currentTimeMillis()).apply();
         if (!enabled) new ClipboardStore(c).clear();
     }
+    static boolean extendedDictionary(Context c) { return prefs(c).getBoolean("extendedDictionary",true); }
     static String theme(Context c) {
         String value = prefs(c).getString("keyboardTheme", "system");
         return "light".equals(value) || "dark".equals(value) ? value : "system";

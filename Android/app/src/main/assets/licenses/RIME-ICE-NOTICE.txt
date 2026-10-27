@@ -1,0 +1,11 @@
+雾凇拼音 / Rime Ice
+作者：iDvel 与 rime-ice 贡献者
+来源：https://github.com/iDvel/rime-ice
+上游文件：cn_dicts/base.dict.yaml
+获取日期：2026-10-26
+上游文件 SHA256：0418d5103d8e40c8fff4b686a873ad03e9836cd0419ecae0b7e1e2526312dba0
+许可证：GPL-3.0（完整文本：RIME-ICE-LICENSE.txt）。
+修改：从基础词库未覆盖的 2–4 音节词中按权重选取 30000 词，词频乘以 0.05 与基础词频配合。
+随 APK 的 dictionary/ice-common.dict.yaml 是可编辑的完整衍生词库源码。
+未引入 Rime 原生引擎，不能保证与完整 Rime 的排序一致。
+上游词库来源说明随包提供：RIME-ICE-UPSTREAM-NOTES.txt。

@@ -29,11 +29,23 @@ final class Ui {
         boolean accent=color==palette.accent;
         Button b=new Button(c) {
             boolean repeated;
+            PopupWindow preview;
+            private void hidePreview(){if(preview!=null){preview.dismiss();preview=null;}}
+            private void showPreview(){
+                if(!label.matches("[A-Za-z]") || !Options.prefs(c).getBoolean("keyPreview",true))return;
+                TextView text=Ui.text(c,label,30,palette.ink);text.setGravity(Gravity.CENTER);text.setContentDescription("按键预览 "+label);
+                text.setBackground(Ui.round(palette.key,9,c));
+                preview=new PopupWindow(text,Math.max(getWidth()+dp(c,14),dp(c,46)),dp(c,64),false);
+                preview.setTouchable(false);preview.setClippingEnabled(true);preview.setElevation(dp(c,5));
+                int[] position=new int[2];getLocationInWindow(position);
+                preview.showAtLocation(getRootView(),Gravity.TOP|Gravity.LEFT,Math.max(0,position[0]-dp(c,7)),Math.max(0,position[1]-dp(c,60)));
+            }
             final Runnable tick=new Runnable(){public void run(){repeated=true;action.run();postDelayed(this,55);}};
             @Override public boolean onTouchEvent(MotionEvent event){
                 int a=event.getActionMasked();
-                if(a==MotionEvent.ACTION_DOWN){repeated=false;performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);if(repeat)postDelayed(tick,380);}
+                if(a==MotionEvent.ACTION_DOWN){repeated=false;showPreview();if(Options.prefs(c).getBoolean("keyHaptic",true))performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);if(repeat)postDelayed(tick,380);}
                 if(a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL||(a==MotionEvent.ACTION_MOVE&&(event.getX()<0||event.getX()>getWidth()||event.getY()<0||event.getY()>getHeight())))removeCallbacks(tick);
+                if(a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL)hidePreview();
                 if(a==MotionEvent.ACTION_CANCEL)repeated=false;
                 return super.onTouchEvent(event);
             }
@@ -47,12 +59,12 @@ final class Ui {
                 canvas.drawPath(path,paint);
             }
             @Override public boolean performClick(){if(repeated){repeated=false;return true;}return super.performClick();}
-            @Override protected void onDetachedFromWindow(){removeCallbacks(tick);super.onDetachedFromWindow();}
-            @Override protected void onWindowVisibilityChanged(int visibility){if(visibility!=VISIBLE&&tick!=null)removeCallbacks(tick);super.onWindowVisibilityChanged(visibility);}
+            @Override protected void onDetachedFromWindow(){hidePreview();removeCallbacks(tick);super.onDetachedFromWindow();}
+            @Override protected void onWindowVisibilityChanged(int visibility){if(visibility!=VISIBLE){hidePreview();if(tick!=null)removeCallbacks(tick);}super.onWindowVisibilityChanged(visibility);}
         };
         boolean character=label.codePointCount(0,label.length())==1;
         boolean space=label.equals("空格");
-        b.setText(label);b.setContentDescription(description);b.setTextSize(character?20:14);
+        b.setText(label);b.setContentDescription(description);b.setTextSize(character?22:14);
         b.setTypeface(android.graphics.Typeface.create(character||space?"sans-serif":"sans-serif-medium",android.graphics.Typeface.NORMAL));
         b.setTextColor(accent?palette.onAccent:space?palette.muted:palette.ink);b.setAllCaps(false);
         b.setMinWidth(0);b.setMinimumWidth(0);b.setMinHeight(0);b.setMinimumHeight(0);b.setPadding(0,0,0,0);b.setIncludeFontPadding(false);
@@ -64,7 +76,7 @@ final class Ui {
         var keyFace=new LayerDrawable(new android.graphics.drawable.Drawable[]{shadow,face});
         keyFace.setLayerInset(0,0,dp(c,1),0,0);
         keyFace.setLayerInset(1,0,0,0,dp(c,1));
-        b.setBackground(new InsetDrawable(keyFace,dp(c,3),dp(c,4),dp(c,3),dp(c,4)));
+        b.setBackground(new InsetDrawable(keyFace,dp(c,2),dp(c,3),dp(c,2),dp(c,3)));
         b.setOnClickListener(v->action.run());return b;
     }
     static Button tool(Context c,String label,String description,Runnable action){

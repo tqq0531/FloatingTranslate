@@ -57,7 +57,7 @@ public final class MainActivity extends Activity {
         body=Ui.column(this);body.setPadding(d(20),d(16),d(20),d(28));body.setFocusableInTouchMode(true);
         scroll.setOnApplyWindowInsetsListener((v,insets)->{int top,bottom;if(android.os.Build.VERSION.SDK_INT>=30){var bars=insets.getInsets(WindowInsets.Type.systemBars());top=bars.top;bottom=bars.bottom;}else{top=insets.getSystemWindowInsetTop();bottom=insets.getSystemWindowInsetBottom();}v.setPadding(0,top,0,bottom);return insets;});
         scroll.addView(body);setContentView(scroll);
-        createHeader();createWelcome();createAppearance();createPreferences();createLanguagePack();createTrial();createPrivacy();
+        createHeader();createWelcome();createAppearance();createDictionary();createPreferences();createLanguagePack();createTrial();createPrivacy();
         var footer=SettingsUi.text(this,"浮译 Android  ·  "+BuildConfig.VERSION_NAME,11,ui.MUTED,false);footer.setGravity(Gravity.CENTER);footer.setPadding(0,d(24),0,0);body.addView(footer);
     }
     private boolean trialFocused(){
@@ -131,7 +131,29 @@ public final class MainActivity extends Activity {
         card.addView(heightControl,new LinearLayout.LayoutParams(-1,d(44)));
         var range=new LinearLayout(this);range.addView(SettingsUi.text(this,"紧凑",11,ui.MUTED,false),new LinearLayout.LayoutParams(0,-2,1));
         range.addView(SettingsUi.text(this,"舒展",11,ui.MUTED,false));card.addView(range);SettingsUi.gap(card,8);
-        card.addView(SettingsUi.text(this,"实时保存，下次使用仍保留你的设置。",11,ui.MUTED,false));body.addView(card);
+        card.addView(SettingsUi.button(this,"恢复默认高度",ui.PALE,ui.INK,()->Options.setKeyHeight(this,54)));
+        SettingsUi.divider(card);
+        var preview=SettingsUi.toggle(this,"按键气泡","按下字母时显示放大预览",View.NO_ID,card);
+        preview.setChecked(Options.prefs(this).getBoolean("keyPreview",true));
+        preview.setOnCheckedChangeListener((v,on)->Options.prefs(this).edit().putBoolean("keyPreview",on).apply());
+        var haptic=SettingsUi.toggle(this,"按键振动","跟随手机的触感反馈设置",View.NO_ID,card);
+        haptic.setChecked(Options.prefs(this).getBoolean("keyHaptic",true));
+        haptic.setOnCheckedChangeListener((v,on)->Options.prefs(this).edit().putBoolean("keyHaptic",on).apply());
+        body.addView(card);
+    }
+    private void createDictionary(){
+        section("拼音词库","两种词库均在手机本地运行");var card=SettingsUi.card(this);
+        var toggle=SettingsUi.toggle(this,"扩展开源词库 · 雾凇拼音","开启：基础词库＋雾凇常用词；关闭：仅基础词库",View.NO_ID,card);
+        toggle.setContentDescription("扩展开源词库");toggle.setChecked(Options.extendedDictionary(this));
+        toggle.setOnCheckedChangeListener((v,on)->Options.prefs(this).edit().putBoolean("extendedDictionary",on).apply());
+        SettingsUi.gap(card,8);
+        card.addView(SettingsUi.text(this,"已内置 · 无需下载 · 离线使用\n基础：Rime / AOSP 拼音词库\n扩展：iDvel/rime-ice，GPL-3.0；常用词精选版。\n支持单字简拼、词语简拼及全拼混输。",12,ui.MUTED,false));
+        card.addView(SettingsUi.button(this,"词库来源与许可证",ui.PALE,ui.INK,()->{
+            try(var reader=new java.io.BufferedReader(new java.io.InputStreamReader(getAssets().open("licenses/RIME-ICE-NOTICE.txt")))){
+                StringBuilder text=new StringBuilder();String line;while((line=reader.readLine())!=null)text.append(line).append('\n');
+                new android.app.AlertDialog.Builder(this).setTitle("扩展词库来源").setMessage(text.toString()).setPositiveButton("关闭",null).show();
+            }catch(java.io.IOException ignored){Toast.makeText(this,"无法读取词库说明",Toast.LENGTH_SHORT).show();}
+        }));body.addView(card);
     }
     private void createPreferences(){
         section("输入偏好","按自己的习惯来");var card=SettingsUi.card(this);

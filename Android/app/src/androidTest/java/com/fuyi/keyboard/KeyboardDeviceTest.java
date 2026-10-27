@@ -32,6 +32,7 @@ public final class KeyboardDeviceTest extends InstrumentationTestCase {
     private void tap(String label,boolean description) throws Exception {
         AccessibilityNodeInfo node=null;
         for(int i=0;i<15&&node==null;i++){node=find(label,description);if(node==null)Thread.sleep(100);}
+        if(node==null)screenshot("missing-key.png");
         assertNotNull("Missing key: "+label,node);boolean clicked=node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
         for(var parent=node.getParent();!clicked&&parent!=null;parent=parent.getParent())clicked=parent.performAction(AccessibilityNodeInfo.ACTION_CLICK);
         assertTrue("Click: "+label,clicked);Thread.sleep(200);
@@ -52,6 +53,54 @@ public final class KeyboardDeviceTest extends InstrumentationTestCase {
         getInstrumentation().runOnMainSync(()->{editor.requestRectangleOnScreen(new android.graphics.Rect(0,0,editor.getWidth(),editor.getHeight()),true);activity.getSystemService(InputMethodManager.class).showSoftInput(editor,InputMethodManager.SHOW_IMPLICIT);});
         Thread.sleep(1200);
         getInstrumentation().runOnMainSync(()->{var scroll=(android.widget.ScrollView)activity.findViewById(R.id.settings_scroll);var rect=new android.graphics.Rect();editor.getDrawingRect(rect);scroll.offsetDescendantRectToMyCoords(editor,rect);scroll.scrollTo(0,Math.max(0,rect.top-24));});
+        // A real tap starts input after the cold-start window and IME binding are ready.
+        var editorRect=new android.graphics.Rect();
+        getInstrumentation().runOnMainSync(()->editor.getGlobalVisibleRect(editorRect));
+        touch(editorRect,false,false);
+        for(int i=0;i<10&&find("切换中英文：中文拼音",true)==null;i++)Thread.sleep(100);
+        if(find("切换中英文：中文拼音",true)==null){
+            // Instrumentation kills the process that also hosts our IME; rebind after the
+            // initial PHASE_SERVER_UPDATE_CLIENT_VISIBILITY rejection on Android 16.
+            getInstrumentation().runOnMainSync(()->{
+                var imm=activity.getSystemService(InputMethodManager.class);
+                imm.hideSoftInputFromWindow(editor.getWindowToken(),0);imm.restartInput(editor);
+            });
+            Thread.sleep(300);
+            getInstrumentation().runOnMainSync(()->activity.getSystemService(InputMethodManager.class).showSoftInput(editor,InputMethodManager.SHOW_IMPLICIT));
+            for(int i=0;i<30&&find("切换中英文：中文拼音",true)==null;i++)Thread.sleep(100);
+        }
+    }
+    public void testLetterPressPreviewPosition()throws Exception {
+        var rect=bounds("按键 q");var before=getInstrumentation().getUiAutomation().takeScreenshot();long time=android.os.SystemClock.uptimeMillis();
+        var down=android.view.MotionEvent.obtain(time,time,android.view.MotionEvent.ACTION_DOWN,rect.centerX(),rect.centerY(),0);
+        down.setSource(android.view.InputDevice.SOURCE_TOUCHSCREEN);
+        assertTrue(getInstrumentation().getUiAutomation().injectInputEvent(down,true));down.recycle();Thread.sleep(250);
+        try {
+            screenshot("keyboard-press-017.png");
+            // Non-touchable visual previews intentionally do not become accessibility windows.
+            var pressed=getInstrumentation().getUiAutomation().takeScreenshot();
+            int changed=0,total=0;
+            for(int y=Math.max(0,rect.top-rect.height());y<rect.top;y+=2)
+                for(int x=rect.left;x<rect.right;x+=2){total++;if(before.getPixel(x,y)!=pressed.getPixel(x,y))changed++;}
+            before.recycle();pressed.recycle();
+            assertTrue("Visible bubble must appear above the pressed key",changed>total/5);
+        } finally {
+            var up=android.view.MotionEvent.obtain(time,android.os.SystemClock.uptimeMillis(),android.view.MotionEvent.ACTION_UP,rect.centerX(),rect.centerY(),0);
+            up.setSource(android.view.InputDevice.SOURCE_TOUCHSCREEN);getInstrumentation().getUiAutomation().injectInputEvent(up,true);up.recycle();
+        }
+        Thread.sleep(150);assertNull(find("按键预览 Q",true));assertEquals("q",text());
+    }
+    public void testSingleInitialStableLayoutAndDictionarySwitch()throws Exception {
+        var context=getInstrumentation().getTargetContext();
+        int keyTop=bounds("按键 q").top;
+        type("d");assertNotNull(find("的",false));
+        assertEquals("Candidate row must not shift keyboard",keyTop,bounds("按键 q").top);
+        tap("空格");assertEquals("的",text());
+        Options.prefs(context).edit().putBoolean("extendedDictionary",false).commit();Thread.sleep(1200);
+        type("w");tap("空格");assertEquals("的我",text());
+        Options.prefs(context).edit().putBoolean("extendedDictionary",true).commit();Thread.sleep(1800);
+        type("weixin");assertNotNull("Bundled extended word",find("微信",false));tap("微信");
+        assertEquals("的我微信",text());screenshot("keyboard-017.png");
     }
     public void testRealSoftKeyboardChineseEnglishAndHistoryInsertion()throws Exception {
         type("wo");tap("空格");type("jintian");tap("空格");type("qubeijing");tap("空格");

@@ -18,4 +18,18 @@ public class PinyinDictionaryTest {
         assertEquals("",engine.complete("zzzzzz"));
     }
     @Test public void swappedLettersConsumeOriginalInput() {assertTrue(engine.candidates("zhogn").stream().anyMatch(c->c.text().equals("中")&&c.consumed()==5));}
+    @Test public void unfinishedSyllablesAndMixedInitials() {
+        assertEquals("的",engine.candidates("d").get(0).text());
+        assertEquals("我",engine.candidates("w").get(0).text());
+        assertTrue(engine.candidates("zh").stream().anyMatch(c->c.text().equals("中")&&c.consumed()==2));
+        for(String input : new String[]{"nih","nhao","nh","nihao"})
+            assertTrue(input,engine.candidates(input).stream().anyMatch(c->c.text().equals("你好")&&c.consumed()==input.length()));
+        assertTrue(engine.candidates("ni'h").stream().anyMatch(c->c.text().equals("你好")&&c.consumed()==4));
+        assertTrue(engine.candidates("123").isEmpty());
+    }
+    @Test public void optionalExtendedDictionaryAddsWords() throws Exception {
+        var extended=new PinyinDictionary(new FileReader(System.getProperty("fuyi.dictionary")),new FileReader("src/main/assets/dictionary/ice-common.dict.yaml"));
+        assertTrue(extended.candidates("wugeyi").stream().anyMatch(c->c.text().equals("五个亿")));
+        assertEquals("的",extended.candidates("d").get(0).text());
+    }
 }
