@@ -21,14 +21,19 @@ public final class FuyiImeService extends InputMethodService {
     private LocalTranslator translator;
     private ClipboardStore history;
     private ClipboardCapture capture;
+    private PersonalDictionary personal;
+    private String lastChosen="",candidateQuery="";
+    private boolean numbers=false;
+    private long limitNoticeAt;
     private final android.content.SharedPreferences.OnSharedPreferenceChangeListener optionsChanged=(prefs,key) -> {
         if (this.root==null) return;
         if ("extendedDictionary".equals(key)) loadDictionary();
+        else if ("learning".equals(key)||"learningReset".equals(key)) {lastChosen="";refresh();}
         else if ("history".equals(key)) renderHistory();
         else if ("keyboardTheme".equals(key)||"keyHeight".equals(key)) handler.post(this::rebuildKeyboard);
     };
     private LinearLayout root, candidateRow, keys, historyRows, toolbar, translationRow, appearanceRows;
-    private HorizontalScrollView candidateScroll;
+    private HorizontalScrollView candidateScroll,translationScroll,compositionScroll;
     private TextView englishView, compositionView;
     private Button modeButton, historyButton, directionButton, useTranslationButton;
     private boolean appearanceOpen=false;
@@ -46,7 +51,7 @@ public final class FuyiImeService extends InputMethodService {
         if (active) handler.postDelayed(this,1000);
     }};
     @Override public void onCreate() {
-        super.onCreate(); history=new ClipboardStore(this);
+        super.onCreate(); history=new ClipboardStore(this);personal=PersonalDictionary.get(this);
         Options.prefs(this).registerOnSharedPreferenceChangeListener(optionsChanged);
         capture=new ClipboardCapture(this,() -> privateField,() -> { if(historyOpen) renderHistory(); });
         loadDictionary();
@@ -82,22 +87,24 @@ public final class FuyiImeService extends InputMethodService {
         var window=getWindow().getWindow();
         if(window!=null){window.setNavigationBarColor(palette.bg);if(android.os.Build.VERSION.SDK_INT>=30 && window.getInsetsController()!=null)window.getInsetsController().setSystemBarsAppearance(palette.dark?0:WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS);}
         toolbar=new LinearLayout(this);toolbar.setGravity(Gravity.CENTER_VERTICAL);toolbar.setPadding(Ui.dp(this,7),0,Ui.dp(this,7),0);
-        historyButton=Ui.tool(this,"历史","剪贴板",()->{if(!privateField){historyOpen=true;appearanceOpen=false;renderHistory();renderAppearance();}});
-        toolbar.addView(historyButton,new LinearLayout.LayoutParams(Ui.dp(this,52),Ui.dp(this,40)));
+        Button brand=Ui.icon(this,"brand","打开浮译设置",this::openSettings);toolbar.addView(brand,new LinearLayout.LayoutParams(Ui.dp(this,36),Ui.dp(this,36)));
         directionButton=Ui.tool(this,"中 → 英","切换翻译方向",this::toggleMode);directionButton.setTextColor(palette.accent);directionButton.setTextSize(14);
         toolbar.addView(directionButton,new LinearLayout.LayoutParams(0,Ui.dp(this,40),1));
-        Button appearance=Ui.tool(this,"调节","键盘高度与主题",()->{appearanceOpen=true;historyOpen=false;renderHistory();renderAppearance();});
-        toolbar.addView(appearance,new LinearLayout.LayoutParams(Ui.dp(this,52),Ui.dp(this,40)));
-        Button hide=Ui.tool(this,"⌄","收起键盘",()->requestHideSelf(0));toolbar.addView(hide,new LinearLayout.LayoutParams(Ui.dp(this,36),Ui.dp(this,40)));
+        historyButton=Ui.icon(this,"clipboard","剪贴板",()->{if(!privateField){historyOpen=true;appearanceOpen=false;renderHistory();renderAppearance();}});
+        toolbar.addView(historyButton,new LinearLayout.LayoutParams(Ui.dp(this,36),Ui.dp(this,36)));
+        Button appearance=Ui.icon(this,"settings","键盘高度与主题",()->{appearanceOpen=true;historyOpen=false;renderHistory();renderAppearance();});
+        var iconParams=new LinearLayout.LayoutParams(Ui.dp(this,36),Ui.dp(this,36));iconParams.leftMargin=Ui.dp(this,12);toolbar.addView(appearance,iconParams);
+        Button hide=Ui.icon(this,"down","收起键盘",()->requestHideSelf(0));var hideParams=new LinearLayout.LayoutParams(Ui.dp(this,36),Ui.dp(this,36));hideParams.leftMargin=Ui.dp(this,12);toolbar.addView(hide,hideParams);
         root.addView(toolbar,new LinearLayout.LayoutParams(-1,Ui.dp(this,56)));
         translationRow=new LinearLayout(this);translationRow.setGravity(Gravity.CENTER_VERTICAL);translationRow.setBackground(Ui.round(palette.surface,10,this));translationRow.setPadding(Ui.dp(this,10),0,Ui.dp(this,4),0);
         TextView badge=Ui.text(this,"译",13,palette.accent);badge.setGravity(Gravity.CENTER);translationRow.addView(badge,new LinearLayout.LayoutParams(Ui.dp(this,24),-1));
-        englishView=Ui.text(this,"",15,palette.ink);englishView.setPadding(Ui.dp(this,6),Ui.dp(this,6),Ui.dp(this,6),Ui.dp(this,6));englishView.setMaxLines(2);englishView.setEllipsize(android.text.TextUtils.TruncateAt.END);englishView.setOnLongClickListener(v->{copyEnglish();return true;});
-        translationRow.addView(englishView,new LinearLayout.LayoutParams(0,-2,1));
+        englishView=Ui.text(this,"",15,palette.ink);englishView.setPadding(Ui.dp(this,6),Ui.dp(this,6),Ui.dp(this,6),Ui.dp(this,6));englishView.setSingleLine(true);englishView.setEllipsize(null);englishView.setGravity(Gravity.CENTER_VERTICAL);englishView.setOnLongClickListener(v->{copyEnglish();return true;});
+        translationScroll=new HorizontalScrollView(this);translationScroll.setContentDescription("左右滑动查看完整译文");translationScroll.setHorizontalScrollBarEnabled(true);translationScroll.setFillViewport(true);
+        translationScroll.addView(englishView,new android.widget.FrameLayout.LayoutParams(-2,-1));translationRow.addView(translationScroll,new LinearLayout.LayoutParams(0,-1,1));
         useTranslationButton=Ui.tool(this,"用英文","使用译文",this::insertEnglish);useTranslationButton.setTextColor(palette.accent);useTranslationButton.setTextSize(12);
         translationRow.addView(useTranslationButton,new LinearLayout.LayoutParams(Ui.dp(this,58),Ui.dp(this,42)));
         LinearLayout.LayoutParams translationParams=new LinearLayout.LayoutParams(-1,Ui.dp(this,42));translationParams.setMargins(Ui.dp(this,5),0,Ui.dp(this,5),Ui.dp(this,4));root.addView(translationRow,translationParams);
-        compositionView=Ui.text(this,"",12,palette.muted);compositionView.setMaxLines(1);compositionView.setEllipsize(android.text.TextUtils.TruncateAt.END);compositionView.setPadding(Ui.dp(this,12),0,0,0);root.addView(compositionView,new LinearLayout.LayoutParams(-1,Ui.dp(this,16)));
+        compositionView=Ui.text(this,"",12,palette.muted);compositionView.setSingleLine(true);compositionView.setEllipsize(null);compositionView.setPadding(Ui.dp(this,12),0,0,0);compositionScroll=new HorizontalScrollView(this);compositionScroll.setHorizontalScrollBarEnabled(false);compositionScroll.setContentDescription("左右滑动查看完整拼音");compositionScroll.addView(compositionView);root.addView(compositionScroll,new LinearLayout.LayoutParams(-1,Ui.dp(this,16)));
         candidateScroll=new HorizontalScrollView(this);candidateScroll.setHorizontalScrollBarEnabled(false);
         candidateRow=new LinearLayout(this);candidateScroll.addView(candidateRow);root.addView(candidateScroll,new LinearLayout.LayoutParams(-1,Ui.dp(this,40)));
         keys=Ui.column(this);root.addView(keys);
@@ -110,12 +117,12 @@ public final class FuyiImeService extends InputMethodService {
     private void openSettings(){startActivity(new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));}
     private void updatePanels(){
         if(root==null)return;boolean overlay=(historyOpen&&!privateField)||appearanceOpen;
-        boolean composing=!latin&&!raw.isEmpty()&&!overlay;
+        boolean composing=!latin&&(!raw.isEmpty()||!candidates.isEmpty())&&!overlay;
         toolbar.setVisibility(overlay||composing?View.GONE:View.VISIBLE);
         candidateScroll.setVisibility(composing?View.VISIBLE:View.GONE);
         translationRow.setVisibility(!overlay&&!privateField?View.VISIBLE:View.GONE);
-        compositionView.setText(privateField?"":raw);
-        compositionView.setVisibility(composing?View.VISIBLE:View.GONE);
+        compositionView.setText(privateField?"":raw.isEmpty()?"联想":raw+(raw.length()>=80?"   80/80 · 请先选词上屏":""));
+        compositionScroll.setVisibility(composing?View.VISIBLE:View.GONE);
         directionButton.setText(latin?"英 → 中":"中 → 英");directionButton.setEnabled(!privateField);
         useTranslationButton.setText(latin?"用中文":"用英文");useTranslationButton.setContentDescription(latin?"使用中文译文":"使用英文译文");
         useTranslationButton.setEnabled(!english.isEmpty());useTranslationButton.setAlpha(english.isEmpty()?0.4f:1f);
@@ -124,7 +131,7 @@ public final class FuyiImeService extends InputMethodService {
     private void renderAppearance(){
         if(appearanceRows==null)return;appearanceRows.removeAllViews();appearanceRows.setVisibility(appearanceOpen?View.VISIBLE:View.GONE);updatePanels();if(!appearanceOpen)return;
         var header=new LinearLayout(this);header.setGravity(Gravity.CENTER_VERTICAL);
-        Button back=Ui.tool(this,"‹","返回键盘",()->{appearanceOpen=false;renderAppearance();});header.addView(back,new LinearLayout.LayoutParams(Ui.dp(this,44),Ui.dp(this,44)));
+        Button back=Ui.icon(this,"back","返回键盘",()->{appearanceOpen=false;renderAppearance();});header.addView(back,new LinearLayout.LayoutParams(Ui.dp(this,44),Ui.dp(this,44)));
         header.addView(Ui.text(this,"键盘调节",15,palette.ink),new LinearLayout.LayoutParams(0,-2,1));
         header.addView(Ui.tool(this,"设置","打开浮译设置",this::openSettings),new LinearLayout.LayoutParams(Ui.dp(this,60),Ui.dp(this,44)));appearanceRows.addView(header);
         var controls=Ui.column(this);controls.setPadding(Ui.dp(this,18),Ui.dp(this,12),Ui.dp(this,18),Ui.dp(this,12));
@@ -141,7 +148,7 @@ public final class FuyiImeService extends InputMethodService {
     }
     @Override public void onStartInput(EditorInfo info,boolean restarting) {
         super.onStartInput(info,restarting); active=true; privateField=InputSafety.privateField(info);
-        latin=privateField;shifted=false;symbols=(info.inputType&InputType.TYPE_MASK_CLASS)==InputType.TYPE_CLASS_NUMBER || (info.inputType&InputType.TYPE_MASK_CLASS)==InputType.TYPE_CLASS_PHONE;
+        lastChosen="";numbers=false;latin=privateField;shifted=false;symbols=(info.inputType&InputType.TYPE_MASK_CLASS)==InputType.TYPE_CLASS_NUMBER || (info.inputType&InputType.TYPE_MASK_CLASS)==InputType.TYPE_CLASS_PHONE;
         raw="";sentence="";english="";translatedSource="";generation++;compositionStart=-1;appearanceOpen=false;
         lastSelection=info.initialSelStart;expectedCaret=lastSelection;historyOpen=false;
         handler.removeCallbacks(expiryTick);handler.postDelayed(expiryTick,1000);
@@ -167,28 +174,34 @@ public final class FuyiImeService extends InputMethodService {
         lastSelection=newStart;
     }
     private boolean expired() { return android.os.SystemClock.elapsedRealtime()-touched > (sentence.matches("(?s).*[。！？.!?]$")?8000:60000); }
-    private void clearSentence() {sentence="";english="";translatedSource="";generation++;if(root!=null)refresh();}
-    private void toggleMode() {if(privateField)return;flushRaw();clearSentence();latin=!latin;symbols=false;shifted=false;renderKeys();refresh();}
+    private void clearSentence() {lastChosen="";sentence="";english="";translatedSource="";generation++;if(root!=null)refresh();}
+    private void toggleMode() {if(privateField)return;flushRaw();clearSentence();latin=!latin;symbols=false;numbers=false;shifted=false;renderKeys();refresh();}
     private void type(String value) {
         InputConnection ic=getCurrentInputConnection();if(ic==null)return;
-        if(latin&&!privateField&&!symbols){
-            if(raw.length()>=1000)return;
+        if(latin&&!privateField&&!symbols&&!numbers){
+            if(raw.length()>=1000){limitNotice("本次英文已达 1000 字符，请先确认上屏");return;}
             if(raw.isEmpty())compositionStart=lastSelection;
             raw+=value;expectedCaret=compositionStart<0?-1:compositionStart+raw.length();ic.setComposingText(raw,1);touched=android.os.SystemClock.elapsedRealtime();refresh();return;
         }
-        if(privateField || symbols || !value.matches("[a-z']")) {
+        if(privateField || symbols || numbers || !value.matches("[a-z']")) {
             flushRaw();ic.commitText(value,1);expectedCaret=lastSelection+value.length();
             if(!privateField && !latin && !sentence.isEmpty()) {sentence+=value;touched=android.os.SystemClock.elapsedRealtime();refresh();}
             else clearSentence();return;
         }
         if(dictionary==null){englishView.setText("词库正在准备，请稍候");return;}
         if(raw.isEmpty()) { if(expired())clearSentence();compositionStart=lastSelection; }
-        if(raw.length()>=80)return;
-        raw+=value;expectedCaret=compositionStart<0?-1:compositionStart+raw.length();ic.setComposingText(raw,1);refresh();
+        if(raw.length()>=80){limitNotice("本次拼音已达 80 个字母，请先选词上屏");return;}
+        raw+=value;expectedCaret=compositionStart<0?-1:compositionStart+raw.length();ic.setComposingText(raw,1);refresh();compositionScroll.post(()->compositionScroll.fullScroll(View.FOCUS_RIGHT));
     }
+    private void limitNotice(String message){long now=android.os.SystemClock.elapsedRealtime();if(now-limitNoticeAt>1500){Toast.makeText(this,message,Toast.LENGTH_SHORT).show();limitNoticeAt=now;}}
     private void choose(PinyinDictionary.Candidate candidate) {
         InputConnection ic=getCurrentInputConnection();if(ic==null)return;
         int start=compositionStart;
+        if(!privateField&&Options.learning(this)){
+            String spelling=raw.substring(0,Math.min(raw.length(),candidate.consumed()));
+            personal.remember(spelling,candidate.text(),lastChosen);
+        }
+        lastChosen=candidate.text();
         String rest=raw.substring(Math.min(raw.length(),candidate.consumed()));
         expectedCaret=start<0?-1:start+candidate.text().length();
         ic.beginBatchEdit();
@@ -211,6 +224,7 @@ public final class FuyiImeService extends InputMethodService {
         } else if(!raw.isEmpty()) {flushRaw();refresh();} else type(" ");
     }
     private void backspace() {
+        lastChosen="";
         InputConnection ic=getCurrentInputConnection();if(ic==null)return;
         if(!raw.isEmpty()) {raw=raw.substring(0,raw.offsetByCodePoints(raw.length(),-1));expectedCaret=compositionStart<0?-1:compositionStart+raw.length();ic.setComposingText(raw,1);refresh();return;}
         if(!sentence.isEmpty()) {sentence=sentence.substring(0,sentence.offsetByCodePoints(sentence.length(),-1));touched=android.os.SystemClock.elapsedRealtime();}
@@ -225,15 +239,19 @@ public final class FuyiImeService extends InputMethodService {
         String tail=dictionary.complete(rest);
         return !rest.isEmpty()&&tail.isEmpty()?sentence:sentence+first.text()+tail;
     }
+    private List<String> suggestNext(){
+        var words=new LinkedHashSet<String>(personal.next(lastChosen));words.addAll(dictionary.following(lastChosen));return new ArrayList<>(words);
+    }
     private void refresh() {
         if(root==null)return;
-        candidates=latin||raw.isEmpty()||dictionary==null?List.of():dictionary.candidates(raw);
-        modeButton.setText(privateField?"安全":latin?"EN":"中/英");
+        candidates=latin||privateField||dictionary==null?List.of():raw.isEmpty()?Options.learning(this)?suggestNext().stream().map(word->new PinyinDictionary.Candidate(word,0)).toList():List.of():Options.learning(this)?personal.rank(raw,dictionary.candidates(raw)):dictionary.candidates(raw);
+        modeButton.setText(privateField?"安全":latin?"英":"拼");
         modeButton.setContentDescription(privateField?"安全输入":latin?"切换中英文：英文":"切换中英文：中文拼音");
         historyButton.setEnabled(!privateField);
+        if(!candidateQuery.equals(raw)){candidateQuery=raw;candidateScroll.scrollTo(0,0);}
         candidateRow.removeAllViews();
         for(var candidate:candidates) {
-            Button b=Ui.tool(this,candidate.text(),candidate.text(),()->choose(candidate));b.setTextSize(19);b.setTextColor(candidate==candidates.get(0)?palette.accent:palette.ink);b.setBackgroundColor(Color.TRANSPARENT);
+            Button b=Ui.tool(this,candidate.text(),candidate.text(),()->choose(candidate));b.setTextSize(19);b.setSingleLine(true);b.setEllipsize(null);b.setTextColor(candidate==candidates.get(0)?palette.accent:palette.ink);b.setBackgroundColor(Color.TRANSPARENT);
             LinearLayout.LayoutParams candidateParams=new LinearLayout.LayoutParams(-2,Ui.dp(this,38));candidateParams.setMargins(Ui.dp(this,4),Ui.dp(this,2),Ui.dp(this,4),Ui.dp(this,2));candidateRow.addView(b,candidateParams);
         }
         compositionView.setText(privateField?"密码输入：不翻译、不读取剪贴板":latin?"":sentence.isEmpty()?raw:sentence+(raw.isEmpty()?"":" · "+raw));
@@ -252,7 +270,7 @@ public final class FuyiImeService extends InputMethodService {
             translator.translate(source,latin,(text,status) -> {
                 if(!active||privateField||ticket!=generation)return;
                 english=text;translatedSource=text.isEmpty()?"":source;
-                englishView.setText(text.isEmpty()?status:text);englishView.setTextColor(text.isEmpty()?palette.muted:palette.ink);updatePanels();
+                englishView.setText(text.isEmpty()?status:text);translationScroll.scrollTo(0,0);englishView.setTextColor(text.isEmpty()?palette.muted:palette.ink);updatePanels();
             });
         };
         handler.postDelayed(translationWork,280);
@@ -277,28 +295,30 @@ public final class FuyiImeService extends InputMethodService {
     private void renderKeys() {
         if(keys==null)return;keys.removeAllViews();
         {
-            String[] rows=symbols?(moreSymbols?new String[]{"[]{}<>^~`|","_+×÷≠≈€£¢","…—·「」『』"}:new String[]{"1234567890","@#¥%&*()-","，。！？；：/"}):new String[]{"qwertyuiop","asdfghjkl","zxcvbnm"};
+            String[] rows=numbers?new String[]{"123","456","789"}:symbols?(moreSymbols?new String[]{"[]{}<>^~`|","_+×÷≠≈€£¢","…—·「」『』"}:new String[]{"1234567890","@#¥%&*()-","，。！？；：/"}):new String[]{"qwertyuiop","asdfghjkl","zxcvbnm"};
             for(int r=0;r<rows.length;r++){
                 LinearLayout line=new LinearLayout(this);
-                if(!symbols&&r==1)addSpacer(line,.5f);
-                if(r==2)addKey(line,symbols?"#+=":"⇧",symbols?"更多符号":"大写",1.5f,shifted?palette.key:palette.function,()->{if(symbols){moreSymbols=!moreSymbols;renderKeys();refresh();}else{shifted=!shifted;renderKeys();refresh();}},false);
+                if(!symbols&&!numbers&&r==1)addSpacer(line,.5f);
+                if(r==2&&!numbers)addKey(line,symbols?"#+=":"⇧",symbols?"更多符号":"大写",1.5f,shifted?palette.key:palette.function,()->{if(symbols){moreSymbols=!moreSymbols;renderKeys();refresh();}else{shifted=!shifted;renderKeys();refresh();}},false);
                 for(int i=0;i<rows[r].length();i++){
                     String letter=rows[r].substring(i,i+1);String value=shifted&&!symbols?letter.toUpperCase(Locale.ROOT):letter;
                     String label=symbols?letter:letter.toUpperCase(Locale.ROOT);
                     addKey(line,label,"按键 "+value,1,palette.key,()->{type(value);if(shifted&&!symbols){shifted=false;renderKeys();refresh();}},false);
                 }
-                if(!symbols&&r==1)addSpacer(line,.5f);
-                if(r==2)addKey(line,"⌫","退格",1.5f,palette.function,this::backspace,true);
+                if(!symbols&&!numbers&&r==1)addSpacer(line,.5f);
+                if(r==2&&!numbers)addKey(line,"⌫","退格",1.5f,palette.function,this::backspace,true);
+                if(numbers){String extra=r==0?"⌫":r==1?".":"-";addKey(line,extra,r==0?"退格":"按键 "+extra,1,palette.function,r==0?this::backspace:()->type(extra),r==0);}
                 keys.addView(line);
             }
         }
         LinearLayout bottom=new LinearLayout(this);
-        addKey(bottom,symbols?"ABC":"123","数字与符号",1.2f,palette.function,()->{flushRaw();symbols=!symbols;moreSymbols=false;shifted=false;renderKeys();refresh();},false);
-        addKey(bottom,latin?",":"，","逗号",.85f,palette.key,()->type(latin?",":"，"),false);
-        addKey(bottom,"空格","空格",4f,palette.key,this::space,false).setTextSize(13);
-        addKey(bottom,latin?".":"。","句号",.85f,palette.key,()->type(latin?".":"。"),false);
-        modeButton=addKey(bottom,privateField?"安全":latin?"EN":"中/英",privateField?"安全输入":latin?"切换中英文：英文":"切换中英文：中文拼音",1.2f,palette.function,this::toggleMode,false);modeButton.setTextSize(14);
-        Button enter=addKey(bottom,enterLabel(),"执行："+enterLabel(),2f,palette.accent,this::enter,false);enter.setTextSize(16);
+        addKey(bottom,symbols||numbers?"ABC":"123","数字与符号",1.35f,palette.function,()->{flushRaw();numbers=!(numbers||symbols);symbols=false;moreSymbols=false;shifted=false;renderKeys();refresh();},false);
+        addKey(bottom,"符","符号键盘",.9f,palette.function,()->{flushRaw();symbols=!symbols;numbers=false;moreSymbols=false;renderKeys();refresh();},false);
+        addKey(bottom,latin?",":"，","逗号",.9f,palette.key,()->type(latin?",":"，"),false);
+        Button space=addKey(bottom,numbers?"0":"空格",numbers?"按键 0":"空格",3.1f,palette.key,numbers?()->type("0"):this::space,false);space.setTextSize(numbers?22:13);
+        modeButton=addKey(bottom,privateField?"安全":latin?"英":"拼",privateField?"安全输入":latin?"切换中英文：英文":"切换中英文：中文拼音",1f,palette.key,this::toggleMode,false);modeButton.setTextSize(17);
+        modeButton.setOnLongClickListener(v->{getSystemService(InputMethodManager.class).showInputMethodPicker();return true;});
+        Button enter=addKey(bottom,enterLabel(),"执行："+enterLabel(),1.9f,palette.accent,this::enter,false);enter.setTextSize(16);
         keys.addView(bottom);
     }
     private void addSpacer(LinearLayout line,float weight){line.addView(new View(this),new LinearLayout.LayoutParams(0,1,weight));}
@@ -324,7 +344,7 @@ public final class FuyiImeService extends InputMethodService {
         if(keys==null)return;boolean show=historyOpen&&!privateField&&!appearanceOpen;keys.setVisibility(show||appearanceOpen?View.GONE:View.VISIBLE);historyRows.setVisibility(show?View.VISIBLE:View.GONE);updatePanels();
         historyRows.removeAllViews();if(!show)return;
         LinearLayout header=new LinearLayout(this);header.setGravity(Gravity.CENTER_VERTICAL);header.setPadding(Ui.dp(this,10),0,Ui.dp(this,10),0);
-        Button back=Ui.tool(this,"⌃","返回键盘",()->{historyOpen=false;renderHistory();});header.addView(back,new LinearLayout.LayoutParams(Ui.dp(this,38),Ui.dp(this,38)));
+        Button back=Ui.icon(this,"back","返回键盘",()->{historyOpen=false;renderHistory();});header.addView(back,new LinearLayout.LayoutParams(Ui.dp(this,38),Ui.dp(this,38)));
         header.addView(new View(this),new LinearLayout.LayoutParams(0,1,1));
         TextView title=Ui.text(this,"剪贴板",16,palette.ink);title.setGravity(Gravity.CENTER);title.setBackground(Ui.round(palette.key,10,this));header.addView(title,new LinearLayout.LayoutParams(Ui.dp(this,88),Ui.dp(this,34)));
         TextView expiry=Ui.text(this,"24 小时",14,palette.muted);expiry.setGravity(Gravity.CENTER);header.addView(expiry,new LinearLayout.LayoutParams(Ui.dp(this,74),Ui.dp(this,34)));

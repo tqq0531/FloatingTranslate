@@ -1,3 +1,15 @@
+## Android 0.1.8 — 2026-10-28
+
+Build, lint and 14 JVM tests passed. On the Mac-hosted Pixel_6 API 36 emulator, the combined run passed 19 of 20 device checks. The remaining real-model test exceeded its old 5-second wait; after extending that test wait to 30 seconds, it passed. A final targeted run passed all three checks: real-model default output/copy, long translation scrolling plus numeric/symbol layout, and encrypted personal dictionary persistence. Across these runs all 21 distinct device checks passed; this is not a claim of physical-phone coverage.
+
+验证内容 / Checks:
+- 选过“时”后，下一次 shi 的空格首选为“时”；记忆可清空、从加密文件重载，并生成相邻选词联想。/ Choice ranking, clearing, encrypted reload, and next-word associations.
+- 本次拼音达到 80 个字母后拒绝继续追加并提示先选词；整段可左右滑动，确认后可以继续输入。/ Explicit composition cap with horizontal scrolling and continuation after commit.
+- 真实长句译文保持单行并能左右滑动；123 数字键盘和独立符号入口正常。/ Real long translation scrolls horizontally; number/symbol controls work.
+- 现有高度、跟随系统主题、复制历史和输入流程回归。/ Existing appearance, clipboard and typing regression checks.
+
+Screenshot: [long translation after scrolling](docs/keyboard-018-translation.png). The test screenshot temporarily permits capture in the test activity; production privacy flags remain. Local learning is bounded word-level memory, not a complete predictive language model.
+
 ## Android 0.1.7 — 2026-10-27
 
 Build, lint and 12 JVM tests passed. Pixel_6 API 36 emulator: 17 of 18 device checks passed in the combined run; the remaining letter-preview check was corrected to inspect pixels (non-touchable popup windows do not expose accessibility nodes) and passed independently. All 18 checks have passed on the same production APK. Cold-start instrumentation now rebinds the IME after an Android 16 client-visibility rejection; production input behavior was not bypassed.

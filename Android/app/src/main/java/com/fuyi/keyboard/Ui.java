@@ -85,5 +85,28 @@ final class Ui {
         b.setMinHeight(0);b.setMinimumHeight(0);b.setIncludeFontPadding(false);b.setGravity(Gravity.CENTER);
         b.setBackground(new RippleDrawable(ColorStateList.valueOf(palette.dark?0x20FFFFFF:0x12000000),round(Color.TRANSPARENT,7,c),round(Color.WHITE,7,c)));return b;
     }
+    static Button icon(Context c,String kind,String description,Runnable action){
+        var palette=KeyboardAppearance.from(c);
+        Button button=new Button(c){
+            @Override protected void onDraw(android.graphics.Canvas canvas){
+                float unit=dp(c,22),x=getWidth()/2f,y=getHeight()/2f;
+                var p=new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);p.setColor(palette.ink);p.setStyle(android.graphics.Paint.Style.STROKE);p.setStrokeWidth(dp(c,1.6f));p.setStrokeCap(android.graphics.Paint.Cap.ROUND);p.setStrokeJoin(android.graphics.Paint.Join.ROUND);
+                if(kind.equals("down")||kind.equals("back")){
+                    var path=new android.graphics.Path();
+                    if(kind.equals("down")){path.moveTo(x-unit*.32f,y-unit*.15f);path.lineTo(x,y+unit*.16f);path.lineTo(x+unit*.32f,y-unit*.15f);}
+                    else {path.moveTo(x+unit*.15f,y-unit*.32f);path.lineTo(x-unit*.16f,y);path.lineTo(x+unit*.15f,y+unit*.32f);}canvas.drawPath(path,p);
+                }else if(kind.equals("clipboard")){
+                    canvas.drawRoundRect(x-unit*.3f,y-unit*.36f,x+unit*.3f,y+unit*.4f,dp(c,2),dp(c,2),p);
+                    canvas.drawRoundRect(x-unit*.15f,y-unit*.44f,x+unit*.15f,y-unit*.25f,dp(c,2),dp(c,2),p);
+                    for(int n=0;n<3;n++)canvas.drawLine(x-unit*.15f,y+unit*(-.06f+n*.14f),x+unit*.15f,y+unit*(-.06f+n*.14f),p);
+                }else if(kind.equals("settings")){
+                    for(int n=0;n<3;n++){float yy=y+unit*(n-1)*.3f;canvas.drawLine(x-unit*.36f,yy,x+unit*.36f,yy,p);canvas.drawCircle(x+unit*(n==1?.15f:-.15f),yy,unit*.08f,p);}
+                }else{p.setStyle(android.graphics.Paint.Style.FILL);p.setTextSize(dp(c,21));p.setTextAlign(android.graphics.Paint.Align.CENTER);canvas.drawText("译",x,y-(p.ascent()+p.descent())/2,p);}
+            }
+        };
+        button.setContentDescription(description);button.setMinWidth(0);button.setMinimumWidth(0);button.setMinHeight(0);button.setMinimumHeight(0);button.setPadding(0,0,0,0);button.setStateListAnimator(null);
+        button.setBackground(new RippleDrawable(ColorStateList.valueOf(palette.dark?0x30FFFFFF:0x18000000),round(palette.key,24,c),round(Color.WHITE,24,c)));
+        button.setOnClickListener(v->action.run());return button;
+    }
     static LinearLayout column(Context c) { LinearLayout v=new LinearLayout(c);v.setOrientation(LinearLayout.VERTICAL);return v; }
 }

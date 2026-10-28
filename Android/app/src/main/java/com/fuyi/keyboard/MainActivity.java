@@ -157,6 +157,11 @@ public final class MainActivity extends Activity {
     }
     private void createPreferences(){
         section("输入偏好","按自己的习惯来");var card=SettingsUi.card(this);
+        var learning=SettingsUi.toggle(this,"选词记忆与联想","记住选过的字词，下次相同拼音优先显示；仅本机加密保存",View.NO_ID,card);
+        learning.setChecked(Options.learning(this));learning.setOnCheckedChangeListener((v,on)->Options.prefs(this).edit().putBoolean("learning",on).apply());
+        card.addView(SettingsUi.button(this,"清空选词记忆",ui.PALE,ui.INK,()->{
+            PersonalDictionary.get(this).clear();Options.prefs(this).edit().putLong("learningReset",System.currentTimeMillis()).apply();Toast.makeText(this,"选词记忆已清空",Toast.LENGTH_SHORT).show();
+        }));SettingsUi.divider(card);
         englishSwitch=SettingsUi.toggle(this,"中文输入，默认输出英文","拼音选词后，空格优先提交英文译文",R.id.english_switch,card);englishSwitch.setChecked(Options.prefs(this).getBoolean("englishDefault",false));
         englishSwitch.setOnCheckedChangeListener((v,on)->Options.prefs(this).edit().putBoolean("englishDefault",on).apply());
         SettingsUi.divider(card);
@@ -191,10 +196,10 @@ public final class MainActivity extends Activity {
     }
     private void createPrivacy(){
         section("隐私与安全","清楚知道数据去向");var card=SettingsUi.card(this);
-        SettingsUi.privacyRow(card,"✓","本机加密保存","复制记录仅存于应用私有目录，禁止系统备份。");SettingsUi.gap(card,16);
+        SettingsUi.privacyRow(card,"✓","本机加密保存","复制记录与选词记忆仅存于应用私有目录，禁止系统备份。");SettingsUi.gap(card,16);
         SettingsUi.privacyRow(card,"·","敏感输入保护","密码、验证码、密钥建议切回系统键盘。");SettingsUi.gap(card,16);
         SettingsUi.privacyRow(card,"✓","无需联网","模型随应用内置，此版本没有联网权限。");SettingsUi.divider(card);
-        var detail=SettingsUi.text(this,"复制历史使用 Android Keystore 加密，24 小时到期后不再展示或允许插入。休眠、关机或强行停止可能推迟文件清理，再次访问会先过滤到期记录。关闭保存开关会立即清空。\n\n密码框、不允许个性化学习的输入框，以及带敏感标记的剪贴板会跳过。来源应用没有正确标记密码时无法可靠识别。\n\n正文与译文使用本机模型处理，没有开发者服务器或输入历史记录。此版本使用 APK 内置的中英双向翻译模型，已移除 Google ML Kit 和应用联网权限。不下载模型、不调用云翻译，不发送使用统计。此说明适用于本应用；系统及其他应用的网络行为独立。",12,ui.MUTED,false);detail.setId(R.id.privacy_details);detail.setVisibility(View.GONE);
+        var detail=SettingsUi.text(this,"复制历史使用 Android Keystore 加密，24 小时到期后不再展示或允许插入。休眠、关机或强行停止可能推迟文件清理，再次访问会先过滤到期记录。关闭保存开关会立即清空。\n\n密码框、不允许个性化学习的输入框，以及带敏感标记的剪贴板会跳过。来源应用没有正确标记密码时无法可靠识别。\n\n正文与译文使用本机模型处理，没有开发者服务器。开启选词记忆后，仅加密保存选中的字词、对应拼音与相邻选词关系，最多 2000 条；可以关闭或清空，不保存整段输入正文。此版本使用 APK 内置的中英双向翻译模型，已移除 Google ML Kit 和应用联网权限。不下载模型、不调用云翻译，不发送使用统计。此说明适用于本应用；系统及其他应用的网络行为独立。",12,ui.MUTED,false);detail.setId(R.id.privacy_details);detail.setVisibility(View.GONE);
         Button expand=SettingsUi.button(this,"查看完整隐私说明  ⌄",Color.TRANSPARENT,ui.ACCENT,()->{});expand.setId(R.id.privacy_expand);expand.setOnClickListener(v->{boolean show=detail.getVisibility()!=View.VISIBLE;detail.setVisibility(show?View.VISIBLE:View.GONE);expand.setText(show?"收起隐私说明  ⌃":"查看完整隐私说明  ⌄");});card.addView(expand,new LinearLayout.LayoutParams(-1,d(44)));card.addView(detail);body.addView(card);
     }
     void beginLanguageDownload(){

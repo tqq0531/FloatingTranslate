@@ -9,7 +9,7 @@ import java.util.*;
 public final class PinyinDictionary {
     public record Candidate(String text, int consumed) { }
     private record Word(String text, String code, double weight) { }
-    private final Map<String, List<Word>> full = new HashMap<>(), initials = new HashMap<>(), prefixes = new HashMap<>();
+    private final Map<String, List<Word>> full = new HashMap<>(), initials = new HashMap<>(), prefixes = new HashMap<>(), continuations = new HashMap<>();
     private int maxCode;
     public PinyinDictionary(Reader... inputs) throws IOException {
         for (Reader input : inputs) try (BufferedReader reader = new BufferedReader(input)) {
@@ -25,6 +25,8 @@ public final class PinyinDictionary {
                 double weight = cells.length >= 3 ? Double.parseDouble(cells[2]) : 1;
                 Word word = new Word(cells[0], code, weight);
                 full.computeIfAbsent(code, k -> new ArrayList<>()).add(word);
+                for(int n=1;n<Math.min(word.text().length(),5);n++)
+                    continuations.computeIfAbsent(word.text().substring(0,n),k->new ArrayList<>()).add(word);
                 initials.computeIfAbsent(shortCode, k -> new ArrayList<>()).add(word);
                 // Prefixes complete unfinished single syllables: d/de, zh/zhong, sh/shen.
                 if (syllables.length == 1) for (int n=1;n<code.length();n++)
@@ -36,7 +38,11 @@ public final class PinyinDictionary {
             }
         }
         Comparator<Word> order = Comparator.comparingDouble(Word::weight).reversed();
-        for (Map<String,List<Word>> index : List.of(full, initials, prefixes)) for (List<Word> words : index.values()) words.sort(order);
+        for (Map<String,List<Word>> index : List.of(full, initials, prefixes, continuations)) for (List<Word> words : index.values()) words.sort(order);
+    }
+    public List<String> following(String prefix){
+        if(prefix.isEmpty())return List.of();
+        return continuations.getOrDefault(prefix,List.of()).stream().map(w->w.text().substring(prefix.length())).distinct().limit(12).toList();
     }
     private void indexMixed(Word word, String[] syllables, int index, String code, String fullCode, String initialsCode) {
         if (index == syllables.length) {

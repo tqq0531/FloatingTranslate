@@ -1,6 +1,8 @@
+> Android 0.1.8：长译文和拼音支持左右滑动；本次拼音最多 80 个字母，达到上限提示先选词上屏。新增加密选词记忆与联想、独立数字/符号入口和圆形工具按钮。/ Scrollable translation and Pinyin, an explicit 80-letter composition limit, encrypted local learning, and revised keyboard controls.
+
 > Android 0.1.7：新增可切换的雾凇常用词扩展、单字简拼与混合简拼，改进键盘稳定布局、键帽与按压反馈。[详情与词库许可](docs/keyboard-017.md)。两种词库均离线运行。
 
-# 浮译 Android 0.1.6 / FloatingTranslate for Android
+# 浮译 Android 0.1.8 / FloatingTranslate for Android
 
 轻量中英翻译键盘：中文拼音、英文输入、离线双向翻译，以及保留 24 小时的文字剪贴板。0.1.6 重新设计按键和布局，提供自定义高度及跟随系统的深浅色外观。
 
@@ -9,11 +11,11 @@ A focused bilingual keyboard with Pinyin, English typing, fully offline translat
 ## 安装与使用 / Install and use
 
 1. 安装完整 APK，打开“浮译”，点击“启用键盘”，再选择浮译。试用包使用开发签名。
-2. 底部“中/英 / EN”或顶部“中 → 英 / 英 → 中”切换输入语言及翻译方向。
+2. 底部“拼 / 英”或顶部“中 → 英 / 英 → 中”切换输入语言及翻译方向。
 3. 中文输入拼音后点候选或空格确认；英文空格会保留在同一句中，继续输入会重新翻译完整句子。
 4. 点“用英文 / 用中文”将本次输入替换为译文，长按译文可复制。翻译未就绪时按钮不可用。操作键遵循宿主显示“发送、搜索、完成、换行”；正在组词时先确认，之后再执行发送等动作。
-5. 点击键盘“调节”，选择“跟随系统 / 浅色 / 深色”，拖动滑块改变高度。标准为 100%，约可调至 81%–126%，设置会保留；也可从应用设置调整。
-6. 开启“复制历史”，点键盘“历史”查看并插入以前复制的文字；记录保留 24 小时，可逐条删除或清空。
+5. 点击键盘滑杆图标（调节），选择“跟随系统 / 浅色 / 深色”，拖动滑块改变高度。标准为 100%，约可调至 81%–126%，设置会保留；也可从应用设置调整。
+6. 开启“复制历史”，点键盘剪贴板图标查看并插入以前复制的文字；记录保留 24 小时，可逐条删除或清空。
 
 Install the complete APK and enable/select FloatingTranslate in Android keyboard settings. The language key also changes translation direction. English spaces remain part of the current sentence. “用英文 / 用中文” replaces the current draft with its translation; long-press to copy. The action key confirms an active composition before sending/searching/inserting a line break according to the host app. “调节” provides persistent height and light/dark/system choices. “历史” opens clipboard entries for insertion or deletion.
 
@@ -46,9 +48,9 @@ Quantized OPUS-MT runs on the CPU with beam decoding and repeated-token suppress
 - 使用 Android Keystore 和 AES-GCM 加密，存于应用私有 no-backup 目录。关闭开关即清空；清空浮译不会改动系统当前剪贴板。
 - 仅在系统允许默认输入法读取剪贴板时收集；切换其他输入法或服务被停止期间无法保证记录。
 - 密码框、不允许个性化学习的字段与带敏感标记的剪贴板会跳过。未正确标记的自定义敏感字段可能无法识别。
-- 输入正文、译文不写日志、不上传，不保存打字历史。只有显式开启的复制历史会持久保存。
+- 输入正文、译文不写日志、不上传，不保存打字历史。复制历史需显式开启；默认开启的“选词记忆与联想”另存最多 2000 条拼音、选词及相邻选词关系，使用 Keystore/AES-GCM 加密。可在设置关闭或清空，不保存整段输入正文。
 
-Clipboard history is opt-in, text-only, encrypted locally, excluded from backup, and capped at 100 entries. Entries expire 24 hours after their original copy time; copying duplicates does not renew them. Expired entries cannot be inserted even if device sleep delays file cleanup. Disabling history clears it. Android may restrict clipboard access when this keyboard is not active. Password/sensitive fields and marked sensitive clips are excluded where detectable. Typed text and translations are neither logged nor uploaded.
+Clipboard history is opt-in, text-only, encrypted locally, excluded from backup, and capped at 100 entries. Entries expire 24 hours after their original copy time; copying duplicates does not renew them. Expired entries cannot be inserted even if device sleep delays file cleanup. Disabling history clears it. Android may restrict clipboard access when this keyboard is not active. Password/sensitive fields and marked sensitive clips are excluded where detectable. Typed text and translations are neither logged nor uploaded. Local learning is enabled by default and stores up to 2,000 encrypted spelling/word and adjacent-word records, separately from clipboard history; it can be disabled or cleared in settings.
 
 ## 开发与验证 / Development and verification
 

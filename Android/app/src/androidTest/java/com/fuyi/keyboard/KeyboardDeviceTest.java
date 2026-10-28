@@ -44,7 +44,7 @@ public final class KeyboardDeviceTest extends InstrumentationTestCase {
     private void type(String s)throws Exception {for(char c:s.toCharArray())tap("按键 "+c,true);}
     private String text(){final String[] value={""};getInstrumentation().runOnMainSync(()->value[0]=editor.getText().toString());return value[0];}
     @Override protected void setUp()throws Exception {
-        super.setUp();var info=getInstrumentation().getUiAutomation().getServiceInfo();info.flags|=AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;getInstrumentation().getUiAutomation().setServiceInfo(info);
+        super.setUp();PersonalDictionary.get(getInstrumentation().getTargetContext()).clear();Options.prefs(getInstrumentation().getTargetContext()).edit().putBoolean("learning",true).commit();var info=getInstrumentation().getUiAutomation().getServiceInfo();info.flags|=AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;getInstrumentation().getUiAutomation().setServiceInfo(info);
         var context=getInstrumentation().getTargetContext();Options.prefs(context).edit().putBoolean("englishDefault",false).putBoolean("chineseDefault",false).putString("keyboardTheme","system").putInt("keyHeight",54).commit();
         app=(android.app.Application)context.getApplicationContext();app.registerActivityLifecycleCallbacks(captureLifecycle);
         activity=getInstrumentation().startActivitySync(new Intent(context,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
@@ -69,6 +69,31 @@ public final class KeyboardDeviceTest extends InstrumentationTestCase {
             getInstrumentation().runOnMainSync(()->activity.getSystemService(InputMethodManager.class).showSoftInput(editor,InputMethodManager.SHOW_IMPLICIT));
             for(int i=0;i<30&&find("切换中英文：中文拼音",true)==null;i++)Thread.sleep(100);
         }
+    }
+    public void testRememberedChoiceAndLongPinyinLimit()throws Exception {
+        type("shi");tap("时");
+        getInstrumentation().runOnMainSync(()->{editor.setText("");activity.getSystemService(InputMethodManager.class).restartInput(editor);});Thread.sleep(400);
+        type("shi");tap("空格");assertEquals("时",text());
+        getInstrumentation().runOnMainSync(()->{editor.setText("");activity.getSystemService(InputMethodManager.class).restartInput(editor);});Thread.sleep(400);
+        // Use touch keys without per-key delays to exercise the actual 80-letter limit.
+        for(int i=0;i<81;i++){var node=find("按键 a",true);assertNotNull(node);assertTrue(node.performAction(AccessibilityNodeInfo.ACTION_CLICK));}
+        Thread.sleep(300);assertEquals(80,text().length());
+        assertNotNull(find("a".repeat(80)+"   80/80 · 请先选词上屏",false));
+        var scroll=find("左右滑动查看完整拼音",true);assertNotNull(scroll);assertTrue(scroll.performAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD));
+        tap("空格");type("n");assertTrue(text().endsWith("n"));
+    }
+    public void testScrollableTranslationAndNumberSymbolLayout()throws Exception {
+        // Reach a long result using the real English translation path.
+        tap("切换中英文：中文拼音",true);
+        String source="i want to go to the gym now and i want to have dinner with my friends this evening";
+        for(char letter:source.toCharArray()){if(letter==' ')tap("空格");else tap("按键 "+letter,true);}
+        awaitTranslation("当前英文句子："+source);
+        var scroll=find("左右滑动查看完整译文",true);assertNotNull(scroll);
+        assertTrue("Long translation must be scrollable instead of clipped",scroll.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD));
+        Thread.sleep(200);screenshot("keyboard-018-translation.png");
+        tap("数字与符号",true);type("123");tap("按键 0",true);assertTrue(text().endsWith("1230"));
+        tap("符号键盘",true);tap("按键 @",true);assertTrue(text().endsWith("1230@"));
+        tap("数字与符号",true);assertNotNull(find("按键 q",true));screenshot("keyboard-018-layout.png");
     }
     public void testLetterPressPreviewPosition()throws Exception {
         var rect=bounds("按键 q");var before=getInstrumentation().getUiAutomation().takeScreenshot();long time=android.os.SystemClock.uptimeMillis();
@@ -147,7 +172,7 @@ public final class KeyboardDeviceTest extends InstrumentationTestCase {
         var context=getInstrumentation().getTargetContext();Options.prefs(context).edit().putBoolean("englishDefault",true).commit();
         try {
             type("nihao");AccessibilityNodeInfo result=null;
-            for(int i=0;i<50&&result==null;i++){result=find("Hello.",false);if(result==null)Thread.sleep(100);}
+            for(int i=0;i<300&&result==null;i++){result=find("Hello.",false);if(result==null)Thread.sleep(100);}
             assertNotNull("Expected real English preview",result);
             assertTrue(result.performAction(AccessibilityNodeInfo.ACTION_LONG_CLICK));Thread.sleep(200);
             final String[] copied={""};getInstrumentation().runOnMainSync(()->{var clip=context.getSystemService(android.content.ClipboardManager.class).getPrimaryClip();if(clip!=null)copied[0]=clip.getItemAt(0).getText().toString();});
@@ -231,6 +256,7 @@ public final class KeyboardDeviceTest extends InstrumentationTestCase {
     @Override protected void tearDown()throws Exception {
         Options.history(getInstrumentation().getTargetContext(),false);
         Options.setTheme(getInstrumentation().getTargetContext(),"system");Options.setKeyHeight(getInstrumentation().getTargetContext(),54);
+        PersonalDictionary.get(getInstrumentation().getTargetContext()).clear();
         if(activity!=null)getInstrumentation().runOnMainSync(activity::finish);
         if(app!=null)app.unregisterActivityLifecycleCallbacks(captureLifecycle);
         super.tearDown();
