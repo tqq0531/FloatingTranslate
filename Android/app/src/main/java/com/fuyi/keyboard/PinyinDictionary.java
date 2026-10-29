@@ -11,6 +11,9 @@ public final class PinyinDictionary {
     private record Word(String text, String code, double weight) { }
     private final Map<String, List<Word>> full = new HashMap<>(), initials = new HashMap<>(), prefixes = new HashMap<>(), continuations = new HashMap<>();
     private int maxCode;
+    private String cachedRaw;
+    private List<Candidate> cachedCandidates=List.of();
+    private static final int CANDIDATE_LIMIT=100;
     public PinyinDictionary(Reader... inputs) throws IOException {
         for (Reader input : inputs) try (BufferedReader reader = new BufferedReader(input)) {
             boolean body = false;
@@ -124,6 +127,7 @@ public final class PinyinDictionary {
         }
     }
     public List<Candidate> candidates(String raw) {
+        if(raw.equals(cachedRaw))return cachedCandidates;
         String code = clean(raw); if (code.isEmpty()) return List.of();
         LinkedHashMap<String,Candidate> result = new LinkedHashMap<>();
         String sentence = complete(raw);
@@ -139,11 +143,11 @@ public final class PinyinDictionary {
                 add(result,full.get(new String(swapped)),raw.length());
             }
         }
-        for (int len=Math.min(maxCode,code.length()-1); len>0 && result.size()<20; len--) add(result,full.get(code.substring(0,len)),consumed(raw,len));
-        return new ArrayList<>(result.values()).subList(0, Math.min(result.size(),20));
+        for (int len=Math.min(maxCode,code.length()-1); len>0 && result.size()<CANDIDATE_LIMIT; len--) add(result,full.get(code.substring(0,len)),consumed(raw,len));
+        cachedRaw=raw;cachedCandidates=List.copyOf(new ArrayList<>(result.values()).subList(0, Math.min(result.size(),CANDIDATE_LIMIT)));return cachedCandidates;
     }
     private void add(Map<String,Candidate> result,List<Word> words,int consumed) {
         if (words == null) return;
-        for (Word word:words) { result.putIfAbsent(word.text(),new Candidate(word.text(),consumed)); if (result.size()>=20) break; }
+        for (Word word:words) { result.putIfAbsent(word.text(),new Candidate(word.text(),consumed)); if (result.size()>=CANDIDATE_LIMIT) break; }
     }
 }

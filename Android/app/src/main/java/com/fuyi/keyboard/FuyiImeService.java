@@ -283,12 +283,12 @@ public final class FuyiImeService extends InputMethodService {
         candidateRow.removeAllViews();candidateGrid.removeAllViews();
         if(raw.isEmpty())expandedCandidates=false;
         LinearLayout gridLine=null;int gridIndex=0;
-        for(var item:candidates){
+        for(var item:expandedCandidates?candidates:List.<PinyinDictionary.Candidate>of()){
             if(gridIndex++%3==0){gridLine=new LinearLayout(this);candidateGrid.addView(gridLine);}
             Button cell=Ui.tool(this,item.text(),"候选词："+item.text(),()->choose(item));cell.setTextSize(18);cell.setMinWidth(0);cell.setMaxLines(2);
             gridLine.addView(cell,new LinearLayout.LayoutParams(0,Ui.dp(this,Options.keyHeight(this)),1));
         }
-        for(var candidate:candidates) {
+        for(var candidate:candidates.subList(0,Math.min(candidates.size(),20))) {
             Button b=Ui.tool(this,candidate.text(),candidate.text(),()->choose(candidate));b.setTextSize(19);b.setSingleLine(true);b.setEllipsize(null);b.setTextColor(candidate==candidates.get(0)?palette.accent:palette.ink);b.setBackgroundColor(Color.TRANSPARENT);
             LinearLayout.LayoutParams candidateParams=new LinearLayout.LayoutParams(-2,Ui.dp(this,38));candidateParams.setMargins(Ui.dp(this,4),Ui.dp(this,2),Ui.dp(this,4),Ui.dp(this,2));candidateRow.addView(b,candidateParams);
         }

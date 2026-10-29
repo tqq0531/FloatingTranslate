@@ -43,4 +43,8 @@ public class PinyinDictionaryTest {
         String raw="nihao".repeat(16);
         assertEquals(80,engine.candidates(raw).get(0).consumed());
     }
+    @Test public void frequentSyllableProvidesMoreThanTwentyChoices() {
+        assertTrue(engine.candidates("shi").size()>20);
+        assertTrue(engine.candidates("shi").size()<=100);
+    }
 }

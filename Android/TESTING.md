@@ -1,3 +1,9 @@
+## Android 0.1.13 — 2026-10-29
+
+候选上限从 20 提升到 100（实际数量取决于词库），折叠时展示前 20 个，展开网格可访问全部；同一查询复用候选结果，网格仅展开时构建。保留 0.1.12 英文空格续句和宿主重连修复。
+
+Build, lint and 16 JVM tests passed. Final production APK: full keyboard/settings/clipboard/learning suite OK (25 tests), 170.024s; independent real bilingual offline model check OK (1 test), 6.445s. Previous 0.1.12 full suite also passed 25 tests. Emulator results do not measure physical-phone latency or guarantee all third-party editors. No claim of commercial IME prediction quality.
+
 ## Android 0.1.12 — 2026-10-29
 
 英文逐字直接提交，独立维护本次翻译草稿，避免宿主在空格后结束 composing 时下一词替换前文。宿主 restartInput 后，仅在光标前仍精确匹配本次原文且无选区时保留英文模式和草稿；退格、确认、译文替换适配直接提交。
