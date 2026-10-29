@@ -11,7 +11,7 @@ import android.view.accessibility.AccessibilityNodeInfo;
 public final class SettingsDeviceTest extends InstrumentationTestCase {
     private MainActivity activity;
     @Override protected void setUp()throws Exception{
-        super.setUp();var service=getInstrumentation().getUiAutomation().getServiceInfo();service.flags|=android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;getInstrumentation().getUiAutomation().setServiceInfo(service);activity=(MainActivity)getInstrumentation().startActivitySync(new Intent(getInstrumentation().getTargetContext(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));getInstrumentation().runOnMainSync(()->activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE));getInstrumentation().waitForIdleSync();Thread.sleep(600);
+        super.setUp();var service=getInstrumentation().getUiAutomation().getServiceInfo();service.flags|=android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;getInstrumentation().getUiAutomation().setServiceInfo(service);activity=(MainActivity)getInstrumentation().startActivitySync(new Intent(getInstrumentation().getTargetContext(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));getInstrumentation().runOnMainSync(()->assertEquals(0,activity.getWindow().getAttributes().flags & WindowManager.LayoutParams.FLAG_SECURE));getInstrumentation().waitForIdleSync();Thread.sleep(600);
     }
     public void testPreferenceActionsAndPrivacyDisclosure()throws Exception{
         var context=getInstrumentation().getTargetContext();boolean english=Options.prefs(context).getBoolean("englishDefault",false);Options.history(context,false);
@@ -31,7 +31,7 @@ public final class SettingsDeviceTest extends InstrumentationTestCase {
         getInstrumentation().waitForIdleSync();Thread.sleep(400);var bitmap=getInstrumentation().getUiAutomation().takeScreenshot();assertNotNull(bitmap);try(var output=new java.io.FileOutputStream(new java.io.File(getInstrumentation().getTargetContext().getExternalFilesDir(null),name))){bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,output);}bitmap.recycle();
     }
     public void testSettingsVisualCapture()throws Exception{
-        getInstrumentation().runOnMainSync(()->{activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);activity.getSystemService(android.view.inputmethod.InputMethodManager.class).hideSoftInputFromWindow(activity.getWindow().getDecorView().getWindowToken(),0);((ScrollView)activity.findViewById(R.id.settings_scroll)).scrollTo(0,0);});capture("settings-home.png");
+        getInstrumentation().runOnMainSync(()->{assertEquals(0,activity.getWindow().getAttributes().flags & WindowManager.LayoutParams.FLAG_SECURE);activity.getSystemService(android.view.inputmethod.InputMethodManager.class).hideSoftInputFromWindow(activity.getWindow().getDecorView().getWindowToken(),0);((ScrollView)activity.findViewById(R.id.settings_scroll)).scrollTo(0,0);});capture("settings-home.png");
         getInstrumentation().runOnMainSync(()->{var scroll=(ScrollView)activity.findViewById(R.id.settings_scroll);var bar=activity.findViewById(R.id.download_button);var rect=new android.graphics.Rect();bar.getDrawingRect(rect);scroll.offsetDescendantRectToMyCoords(bar,rect);scroll.scrollTo(0,Math.max(0,rect.top-180));});capture("settings-details.png");
     }
     @Override protected void tearDown()throws Exception{if(activity!=null)getInstrumentation().runOnMainSync(activity::finish);super.tearDown();}

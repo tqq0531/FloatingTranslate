@@ -1,3 +1,7 @@
+## Android 0.2.1 — 2026-10-29
+
+Removed FLAG_SECURE from production settings activity to permit screenshots and screen recording. Existing SettingsDeviceTest no longer clears the flag: it asserts the actual window is not secure. Build and lint passed; both settings screenshot/layout checks passed on Pixel_6 API36 (OK, 2 tests, 5.681s).
+
 ## Android 0.2.0 — 2026-10-29
 
 安卓原生 Rime 迁移 / Native Rime migration:

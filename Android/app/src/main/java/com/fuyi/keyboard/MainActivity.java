@@ -39,7 +39,7 @@ public final class MainActivity extends Activity {
     @Override public void onCreate(Bundle state){
         ui=new SettingsUi(this);
         setTheme(ui.dark?android.R.style.Theme_Material_NoActionBar:android.R.style.Theme_Material_Light_NoActionBar);
-        super.onCreate(state);getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        super.onCreate(state);
         createContent();
         beginLanguageDownload();
     }
