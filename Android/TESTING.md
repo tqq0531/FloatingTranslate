@@ -1,3 +1,9 @@
+## Android 0.1.10 — 2026-10-29
+
+拼音栏使用明确的内容宽度和填充视口，修复仅显示首字母；新增可滚动的三列候选展开面板。中文组词期间输入标点先确认中文，进入数字/符号页保留组词；有拼音时操作键原样上屏，下一次再执行宿主动作。空格继续选中文，译文通过“用英文”提交。
+
+Build, lint and 15 JVM tests passed. Focused Pixel_6 API 36 device check passed: yizhi is shown in full; expand and choose 一直; nihao plus comma produces 你好，; codex plus action commits the literal input. Earlier device attempts were blocked by emulator lock screen, then corrected a test selector and allowed asynchronous dictionary startup. Final focused run: OK (1 test), 8.835 seconds. No physical phone installation was performed.
+
 ## Android 0.1.9 — 2026-10-29
 
 长串拼音增加整串容错候选，支持混合简拼、末尾补全和相邻字母交换；保留分段候选及其原始输入消耗长度。无法识别的字母保留，不静默丢弃。修复词库异步加载期间忽略最初按键的问题。

@@ -32,6 +32,10 @@ public final class FuyiImeService extends InputMethodService {
         else if ("history".equals(key)) renderHistory();
         else if ("keyboardTheme".equals(key)||"keyHeight".equals(key)) handler.post(this::rebuildKeyboard);
     };
+    private boolean expandedCandidates=false;
+    private LinearLayout candidateHeader,candidateGrid;
+    private android.widget.ScrollView candidateGridScroll;
+    private Button expandCandidatesButton;
     private LinearLayout root, candidateRow, keys, historyRows, toolbar, translationRow, appearanceRows;
     private HorizontalScrollView candidateScroll,translationScroll,compositionScroll;
     private TextView englishView, compositionView;
@@ -104,9 +108,13 @@ public final class FuyiImeService extends InputMethodService {
         useTranslationButton=Ui.tool(this,"用英文","使用译文",this::insertEnglish);useTranslationButton.setTextColor(palette.accent);useTranslationButton.setTextSize(12);
         translationRow.addView(useTranslationButton,new LinearLayout.LayoutParams(Ui.dp(this,58),Ui.dp(this,42)));
         LinearLayout.LayoutParams translationParams=new LinearLayout.LayoutParams(-1,Ui.dp(this,42));translationParams.setMargins(Ui.dp(this,5),0,Ui.dp(this,5),Ui.dp(this,4));root.addView(translationRow,translationParams);
-        compositionView=Ui.text(this,"",12,palette.muted);compositionView.setSingleLine(true);compositionView.setEllipsize(null);compositionView.setPadding(Ui.dp(this,12),0,0,0);compositionScroll=new HorizontalScrollView(this);compositionScroll.setHorizontalScrollBarEnabled(false);compositionScroll.setContentDescription("左右滑动查看完整拼音");compositionScroll.addView(compositionView);root.addView(compositionScroll,new LinearLayout.LayoutParams(-1,Ui.dp(this,16)));
+        compositionView=Ui.text(this,"",12,palette.muted);compositionView.setSingleLine(true);compositionView.setEllipsize(null);compositionView.setPadding(Ui.dp(this,12),0,0,0);compositionScroll=new HorizontalScrollView(this);compositionScroll.setHorizontalScrollBarEnabled(false);compositionScroll.setContentDescription("左右滑动查看完整拼音");compositionScroll.setFillViewport(true);compositionScroll.addView(compositionView,new android.widget.FrameLayout.LayoutParams(-2,-1));root.addView(compositionScroll,new LinearLayout.LayoutParams(-1,Ui.dp(this,16)));
         candidateScroll=new HorizontalScrollView(this);candidateScroll.setHorizontalScrollBarEnabled(false);
-        candidateRow=new LinearLayout(this);candidateScroll.addView(candidateRow);root.addView(candidateScroll,new LinearLayout.LayoutParams(-1,Ui.dp(this,40)));
+        candidateRow=new LinearLayout(this);candidateScroll.addView(candidateRow);candidateHeader=new LinearLayout(this);candidateHeader.setGravity(Gravity.CENTER_VERTICAL);
+        candidateHeader.addView(candidateScroll,new LinearLayout.LayoutParams(0,Ui.dp(this,40),1));
+        expandCandidatesButton=Ui.icon(this,"down","展开候选词",()->{expandedCandidates=!expandedCandidates;refresh();});
+        candidateHeader.addView(expandCandidatesButton,new LinearLayout.LayoutParams(Ui.dp(this,40),Ui.dp(this,40)));root.addView(candidateHeader);
+        candidateGridScroll=new android.widget.ScrollView(this);candidateGrid=Ui.column(this);candidateGridScroll.addView(candidateGrid);root.addView(candidateGridScroll,new LinearLayout.LayoutParams(-1,Ui.dp(this,Options.keyHeight(this)*4)));
         keys=Ui.column(this);root.addView(keys);
         historyRows=Ui.column(this);root.addView(historyRows);
         appearanceRows=Ui.column(this);root.addView(appearanceRows);
@@ -119,14 +127,17 @@ public final class FuyiImeService extends InputMethodService {
         if(root==null)return;boolean overlay=(historyOpen&&!privateField)||appearanceOpen;
         boolean composing=!latin&&(!raw.isEmpty()||!candidates.isEmpty())&&!overlay;
         toolbar.setVisibility(overlay||composing?View.GONE:View.VISIBLE);
-        candidateScroll.setVisibility(composing?View.VISIBLE:View.GONE);
+        candidateHeader.setVisibility(composing?View.VISIBLE:View.GONE);
+        candidateGridScroll.setVisibility(composing&&expandedCandidates?View.VISIBLE:View.GONE);
+        expandCandidatesButton.setContentDescription(expandedCandidates?"收起候选词":"展开候选词");
+        expandCandidatesButton.setRotation(expandedCandidates?180:0);
         translationRow.setVisibility(!overlay&&!privateField?View.VISIBLE:View.GONE);
         compositionView.setText(privateField?"":raw.isEmpty()?"联想":raw+(raw.length()>=80?"   80/80 · 请先选词上屏":""));
         compositionScroll.setVisibility(composing?View.VISIBLE:View.GONE);
         directionButton.setText(latin?"英 → 中":"中 → 英");directionButton.setEnabled(!privateField);
         useTranslationButton.setText(latin?"用中文":"用英文");useTranslationButton.setContentDescription(latin?"使用中文译文":"使用英文译文");
         useTranslationButton.setEnabled(!english.isEmpty());useTranslationButton.setAlpha(english.isEmpty()?0.4f:1f);
-        keys.setVisibility(overlay?View.GONE:View.VISIBLE);
+        keys.setVisibility(overlay||(composing&&expandedCandidates)?View.GONE:View.VISIBLE);
     }
     private void renderAppearance(){
         if(appearanceRows==null)return;appearanceRows.removeAllViews();appearanceRows.setVisibility(appearanceOpen?View.VISIBLE:View.GONE);updatePanels();if(!appearanceOpen)return;
@@ -184,18 +195,26 @@ public final class FuyiImeService extends InputMethodService {
             raw+=value;expectedCaret=compositionStart<0?-1:compositionStart+raw.length();ic.setComposingText(raw,1);touched=android.os.SystemClock.elapsedRealtime();refresh();return;
         }
         if(privateField || symbols || numbers || !value.matches("[a-z']")) {
-            flushRaw();ic.commitText(value,1);expectedCaret=lastSelection+value.length();
+            if(!privateField&&!latin&&!raw.isEmpty()&&!value.matches("[a-zA-Z0-9 ]")) {
+                // Punctuation confirms the whole Chinese preview before inserting the mark.
+                String converted=preview().substring(sentence.length());
+                if(!converted.isEmpty())choose(new PinyinDictionary.Candidate(converted,raw.length()));
+                else flushRaw();
+            } else flushRaw();
+            if(!privateField&&!latin)value=switch(value){case ","->"，";case "."->"。";case "?"->"？";case "!"->"！";default->value;};
+            ic.commitText(value,1);expectedCaret=lastSelection+value.length();
             if(!privateField && !latin && !sentence.isEmpty()) {sentence+=value;touched=android.os.SystemClock.elapsedRealtime();refresh();}
             else clearSentence();return;
         }
         // Keep keystrokes while the asynchronous dictionary load finishes.
         if(raw.isEmpty()) { if(expired())clearSentence();compositionStart=lastSelection; }
         if(raw.length()>=80){limitNotice("本次拼音已达 80 个字母，请先选词上屏");return;}
-        raw+=value;expectedCaret=compositionStart<0?-1:compositionStart+raw.length();ic.setComposingText(raw,1);refresh();compositionScroll.post(()->compositionScroll.fullScroll(View.FOCUS_RIGHT));
+        raw+=value;expectedCaret=compositionStart<0?-1:compositionStart+raw.length();ic.setComposingText(raw,1);refresh();compositionView.requestLayout();compositionScroll.post(()->compositionScroll.fullScroll(View.FOCUS_RIGHT));
     }
     private void limitNotice(String message){long now=android.os.SystemClock.elapsedRealtime();if(now-limitNoticeAt>1500){Toast.makeText(this,message,Toast.LENGTH_SHORT).show();limitNoticeAt=now;}}
     private void choose(PinyinDictionary.Candidate candidate) {
         InputConnection ic=getCurrentInputConnection();if(ic==null)return;
+        expandedCandidates=false;
         int start=compositionStart;
         if(!privateField&&Options.learning(this)){
             String spelling=raw.substring(0,Math.min(raw.length(),candidate.consumed()));
@@ -249,7 +268,14 @@ public final class FuyiImeService extends InputMethodService {
         modeButton.setContentDescription(privateField?"安全输入":latin?"切换中英文：英文":"切换中英文：中文拼音");
         historyButton.setEnabled(!privateField);
         if(!candidateQuery.equals(raw)){candidateQuery=raw;candidateScroll.scrollTo(0,0);}
-        candidateRow.removeAllViews();
+        candidateRow.removeAllViews();candidateGrid.removeAllViews();
+        if(raw.isEmpty())expandedCandidates=false;
+        LinearLayout gridLine=null;int gridIndex=0;
+        for(var item:candidates){
+            if(gridIndex++%3==0){gridLine=new LinearLayout(this);candidateGrid.addView(gridLine);}
+            Button cell=Ui.tool(this,item.text(),"候选词："+item.text(),()->choose(item));cell.setTextSize(18);cell.setMinWidth(0);cell.setMaxLines(2);
+            gridLine.addView(cell,new LinearLayout.LayoutParams(0,Ui.dp(this,Options.keyHeight(this)),1));
+        }
         for(var candidate:candidates) {
             Button b=Ui.tool(this,candidate.text(),candidate.text(),()->choose(candidate));b.setTextSize(19);b.setSingleLine(true);b.setEllipsize(null);b.setTextColor(candidate==candidates.get(0)?palette.accent:palette.ink);b.setBackgroundColor(Color.TRANSPARENT);
             LinearLayout.LayoutParams candidateParams=new LinearLayout.LayoutParams(-2,Ui.dp(this,38));candidateParams.setMargins(Ui.dp(this,4),Ui.dp(this,2),Ui.dp(this,4),Ui.dp(this,2));candidateRow.addView(b,candidateParams);
@@ -312,8 +338,8 @@ public final class FuyiImeService extends InputMethodService {
             }
         }
         LinearLayout bottom=new LinearLayout(this);
-        addKey(bottom,symbols||numbers?"ABC":"123","数字与符号",1.35f,palette.function,()->{flushRaw();numbers=!(numbers||symbols);symbols=false;moreSymbols=false;shifted=false;renderKeys();refresh();},false);
-        addKey(bottom,"符","符号键盘",.9f,palette.function,()->{flushRaw();symbols=!symbols;numbers=false;moreSymbols=false;renderKeys();refresh();},false);
+        addKey(bottom,symbols||numbers?"ABC":"123","数字与符号",1.35f,palette.function,()->{numbers=!(numbers||symbols);symbols=false;moreSymbols=false;shifted=false;renderKeys();refresh();},false);
+        addKey(bottom,"符","符号键盘",.9f,palette.function,()->{symbols=!symbols;numbers=false;moreSymbols=false;renderKeys();refresh();},false);
         addKey(bottom,latin?",":"，","逗号",.9f,palette.key,()->type(latin?",":"，"),false);
         Button space=addKey(bottom,numbers?"0":"空格",numbers?"按键 0":"空格",3.1f,palette.key,numbers?()->type("0"):this::space,false);space.setTextSize(numbers?22:13);
         modeButton=addKey(bottom,privateField?"安全":latin?"英":"拼",privateField?"安全输入":latin?"切换中英文：英文":"切换中英文：中文拼音",1f,palette.key,this::toggleMode,false);modeButton.setTextSize(17);
@@ -334,7 +360,7 @@ public final class FuyiImeService extends InputMethodService {
             if(Options.prefs(this).getBoolean("chineseDefault",false)){insertEnglish();return;}
             flushRaw();refresh();return;
         }
-        if(!raw.isEmpty()){if(!candidates.isEmpty()){if(Options.prefs(this).getBoolean("englishDefault",false))insertEnglish();else choose(candidates.get(0));}else{flushRaw();refresh();}return;}
+        if(!raw.isEmpty()){flushRaw();expandedCandidates=false;refresh();return;}
         InputConnection ic=getCurrentInputConnection();EditorInfo info=getCurrentInputEditorInfo();if(ic==null)return;
         int action=info==null?EditorInfo.IME_ACTION_NONE:info.imeOptions&EditorInfo.IME_MASK_ACTION;
         if(info==null||(info.imeOptions&EditorInfo.IME_FLAG_NO_ENTER_ACTION)!=0||action==EditorInfo.IME_ACTION_NONE||action==EditorInfo.IME_ACTION_UNSPECIFIED)ic.commitText("\n",1);else ic.performEditorAction(action);

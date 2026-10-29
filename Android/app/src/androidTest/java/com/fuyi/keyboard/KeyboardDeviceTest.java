@@ -70,6 +70,15 @@ public final class KeyboardDeviceTest extends InstrumentationTestCase {
             for(int i=0;i<30&&find("切换中英文：中文拼音",true)==null;i++)Thread.sleep(100);
         }
     }
+    public void testPunctuationLiteralEnterAndExpandedCandidates()throws Exception {
+        type("yizhi");assertNotNull(find("yizhi",false));
+        screenshot("keyboard-0110-pinyin.png");
+        tap("展开候选词",true);for(int i=0;i<100&&find("候选词：一直",true)==null;i++)Thread.sleep(100);assertNotNull(find("候选词：一直",true));tap("候选词：一直",true);assertEquals("一直",text());
+        getInstrumentation().runOnMainSync(()->{editor.setText("");activity.getSystemService(InputMethodManager.class).restartInput(editor);});Thread.sleep(400);
+        type("nihao");tap("逗号",true);assertEquals("你好，",text());
+        getInstrumentation().runOnMainSync(()->{editor.setText("");activity.getSystemService(InputMethodManager.class).restartInput(editor);});Thread.sleep(400);
+        type("codex");tap("换行");assertEquals("codex",text());
+    }
     public void testLongPinyinWholeCandidateAndPartialChoice()throws Exception {
         type("nihaojintianzhogn");
         screenshot("keyboard-019-long.png");
