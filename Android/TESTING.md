@@ -1,3 +1,9 @@
+## Android 0.1.12 — 2026-10-29
+
+英文逐字直接提交，独立维护本次翻译草稿，避免宿主在空格后结束 composing 时下一词替换前文。宿主 restartInput 后，仅在光标前仍精确匹配本次原文且无选区时保留英文模式和草稿；退格、确认、译文替换适配直接提交。
+
+Build, lint and 15 JVM tests passed. Pixel_6 API 36: OK (2 tests), 20.4s. Verified how + space, explicit host restartInput, are + space + you, full translation source, backspace/retype, literal confirmation without duplication. Existing real-model multiword English translation, full Chinese replacement and default Chinese output also passed. Third-party host behavior still needs phone feedback.
+
 ## Android 0.1.11 — 2026-10-29
 
 修复底部不同字号按键因 LinearLayout 基线对齐而上下错位；固定候选栏 40dp，使其与 16dp 拼音栏合计和空闲工具栏 56dp 等高。各按键行不再按文字基线排布。

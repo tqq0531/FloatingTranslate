@@ -226,6 +226,14 @@ public final class KeyboardDeviceTest extends InstrumentationTestCase {
         }
         fail("Translation did not finish: "+source);return "";
     }
+    public void testEnglishSpacesAndHostRestartKeepSentence()throws Exception {
+        tap("切换中英文：中文拼音",true);type("how");tap("空格");assertEquals("how ",text());
+        getInstrumentation().runOnMainSync(()->activity.getSystemService(InputMethodManager.class).restartInput(editor));Thread.sleep(400);
+        type("are");tap("空格");type("you");assertEquals("how are you",text());
+        assertNotNull(find("当前英文句子：how are you",true));
+        tap("退格",true);type("u");assertEquals("how are you",text());
+        tap("执行：换行",true);assertEquals("how are you",text());
+    }
     public void testEnglishSentenceAppendAndChineseOutput()throws Exception {
         tap("切换中英文：中文拼音",true);
         for(String word:new String[]{"i","want","to","go","to"}){type(word);tap("空格");}

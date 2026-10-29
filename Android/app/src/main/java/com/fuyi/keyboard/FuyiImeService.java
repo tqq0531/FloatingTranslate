@@ -158,7 +158,11 @@ public final class FuyiImeService extends InputMethodService {
         ScrollView scroll=new ScrollView(this);scroll.addView(controls);appearanceRows.addView(scroll,new LinearLayout.LayoutParams(-1,Ui.dp(this,Options.keyHeight(this)*4+54)));
     }
     @Override public void onStartInput(EditorInfo info,boolean restarting) {
-        super.onStartInput(info,restarting); active=true; privateField=InputSafety.privateField(info);
+        super.onStartInput(info,restarting);
+        if(restarting&&active&&latin&&!privateField&&!raw.isEmpty()&&draftMatchesCursor()) {
+            lastSelection=info.initialSelStart;expectedCaret=lastSelection;if(root!=null)refresh();return;
+        }
+        active=true; privateField=InputSafety.privateField(info);
         lastChosen="";numbers=false;latin=privateField;shifted=false;symbols=(info.inputType&InputType.TYPE_MASK_CLASS)==InputType.TYPE_CLASS_NUMBER || (info.inputType&InputType.TYPE_MASK_CLASS)==InputType.TYPE_CLASS_PHONE;
         raw="";sentence="";english="";translatedSource="";generation++;compositionStart=-1;appearanceOpen=false;
         lastSelection=info.initialSelStart;expectedCaret=lastSelection;historyOpen=false;
@@ -175,8 +179,15 @@ public final class FuyiImeService extends InputMethodService {
         raw="";sentence="";english="";translatedSource="";historyOpen=false;appearanceOpen=false;
         if(root!=null) {refresh();renderHistory();} super.onFinishInput();
     }
+    private boolean draftMatchesCursor(){
+        InputConnection connection=getCurrentInputConnection();
+        if(connection==null||raw.isEmpty())return false;
+        CharSequence selected=connection.getSelectedText(0),before=connection.getTextBeforeCursor(raw.length(),0);
+        return (selected==null||selected.length()==0)&&before!=null&&raw.contentEquals(before);
+    }
     @Override public void onUpdateSelection(int oldStart,int oldEnd,int newStart,int newEnd,int candStart,int candEnd) {
         super.onUpdateSelection(oldStart,oldEnd,newStart,newEnd,candStart,candEnd);
+        if(latin&&!raw.isEmpty()&&draftMatchesCursor()) {lastSelection=newStart;return;}
         if(raw.isEmpty() && !sentence.isEmpty() && expectedCaret>=0 && (newStart!=expectedCaret || newStart!=newEnd)) clearSentence();
         if(!raw.isEmpty() && (newStart!=newEnd || (candStart>=0 && newStart!=candEnd))) {
             InputConnection ic=getCurrentInputConnection();if(ic!=null)ic.finishComposingText();raw="";clearSentence();
@@ -192,7 +203,7 @@ public final class FuyiImeService extends InputMethodService {
         if(latin&&!privateField&&!symbols&&!numbers){
             if(raw.length()>=1000){limitNotice("本次英文已达 1000 字符，请先确认上屏");return;}
             if(raw.isEmpty())compositionStart=lastSelection;
-            raw+=value;expectedCaret=compositionStart<0?-1:compositionStart+raw.length();ic.setComposingText(raw,1);touched=android.os.SystemClock.elapsedRealtime();refresh();return;
+            raw+=value;expectedCaret=compositionStart<0?-1:compositionStart+raw.length();ic.commitText(value,1);touched=android.os.SystemClock.elapsedRealtime();refresh();return;
         }
         if(privateField || symbols || numbers || !value.matches("[a-z']")) {
             if(!privateField&&!latin&&!raw.isEmpty()&&!value.matches("[a-zA-Z0-9 ]")) {
@@ -234,7 +245,7 @@ public final class FuyiImeService extends InputMethodService {
     }
     private void flushRaw() {
         InputConnection ic=getCurrentInputConnection();
-        if(!raw.isEmpty() && ic!=null) {ic.commitText(raw,1);raw="";clearSentence();}
+        if(!raw.isEmpty() && ic!=null) {if(!latin)ic.commitText(raw,1);else ic.finishComposingText();raw="";clearSentence();}
     }
     private void space() {
         if(latin){type(" ");return;}
@@ -245,6 +256,7 @@ public final class FuyiImeService extends InputMethodService {
     private void backspace() {
         lastChosen="";
         InputConnection ic=getCurrentInputConnection();if(ic==null)return;
+        if(!raw.isEmpty()&&latin){raw=raw.substring(0,raw.offsetByCodePoints(raw.length(),-1));ic.deleteSurroundingTextInCodePoints(1,0);expectedCaret=compositionStart<0?-1:compositionStart+raw.length();refresh();return;}
         if(!raw.isEmpty()) {raw=raw.substring(0,raw.offsetByCodePoints(raw.length(),-1));expectedCaret=compositionStart<0?-1:compositionStart+raw.length();ic.setComposingText(raw,1);refresh();return;}
         if(!sentence.isEmpty()) {sentence=sentence.substring(0,sentence.offsetByCodePoints(sentence.length(),-1));touched=android.os.SystemClock.elapsedRealtime();}
         ic.deleteSurroundingTextInCodePoints(1,0);expectedCaret=-1;refresh();
