@@ -11,6 +11,8 @@ public final class PinyinDictionary {
     private record Word(String text, String code, double weight) { }
     private final Map<String, List<Word>> full = new HashMap<>(), initials = new HashMap<>(), prefixes = new HashMap<>(), continuations = new HashMap<>();
     private int maxCode;
+    private boolean nativeEnabled;
+    void useNative(boolean enabled){nativeEnabled=enabled;cachedRaw=null;}
     private String cachedRaw;
     private List<Candidate> cachedCandidates=List.of();
     private static final int CANDIDATE_LIMIT=100;
@@ -130,9 +132,14 @@ public final class PinyinDictionary {
         if(raw.equals(cachedRaw))return cachedCandidates;
         String code = clean(raw); if (code.isEmpty()) return List.of();
         LinkedHashMap<String,Candidate> result = new LinkedHashMap<>();
-        String sentence = complete(raw);
-        if(sentence.isEmpty() && code.length()>1) sentence=tolerantSentence(code);
-        if (!sentence.isEmpty()) result.put(sentence,new Candidate(sentence,raw.length()));
+        if(nativeEnabled){
+            // Keep exact bundled/extension entries reachable before long native lists.
+            var exact=full.get(code);if(exact!=null)for(var word:exact.subList(0,Math.min(exact.size(),5)))result.putIfAbsent(word.text(),new Candidate(word.text(),raw.length()));
+            for(var item:NativePinyin.candidates(raw))result.putIfAbsent(item.text(),item);
+        }
+        String sentence = result.isEmpty()?complete(raw):"";
+        if(sentence.isEmpty() && result.isEmpty() && code.length()>1) sentence=tolerantSentence(code);
+        if (!sentence.isEmpty()) result.putIfAbsent(sentence,new Candidate(sentence,raw.length()));
         add(result,full.get(code),raw.length());
         add(result,prefixes.get(code),raw.length());
         add(result,initials.get(code),raw.length());

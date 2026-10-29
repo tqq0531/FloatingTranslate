@@ -7,11 +7,12 @@ android {
         applicationId 'com.fuyi.keyboard'
         minSdk 26
         targetSdk 36
-        versionCode 14
-        versionName '0.1.13'
+        versionCode 15
+        versionName '0.2.0'
         testInstrumentationRunner 'android.test.InstrumentationTestRunner'
         ndk { abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64', 'x86' }
     }
+    packaging { jniLibs { useLegacyPackaging true } }
     buildFeatures { buildConfig true }
     compileOptions { coreLibraryDesugaringEnabled true; sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
     useLibrary 'android.test.runner'
@@ -45,3 +46,15 @@ tasks.register('verifyBundledTranslation') {
     }
 }
 tasks.named('preBuild').configure { dependsOn 'verifyBundledTranslation' }
+
+tasks.register('verifyBundledRime') {
+    doLast {
+        def manifest=new groovy.json.JsonSlurper().parse(rootProject.file('tools/rime-bundled-manifest.json'))
+        manifest.each { entry ->
+            def input=rootProject.file(entry.file)
+            if(!input.isFile() || java.security.MessageDigest.getInstance('SHA-256').digest(input.bytes).encodeHex().toString()!=entry.sha256)
+                throw new GradleException('Missing or modified Rime resource: '+entry.file)
+        }
+    }
+}
+tasks.named('preBuild').configure { dependsOn 'verifyBundledRime' }

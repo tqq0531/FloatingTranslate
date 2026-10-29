@@ -74,6 +74,7 @@ public final class FuyiImeService extends InputMethodService {
                         loaded=new PinyinDictionary(basic,extra);
                     }
                 } else loaded=new PinyinDictionary(basic);
+                loaded.useNative(NativePinyin.prepare(this));
                 handler.post(() -> {if(request==dictionaryGeneration){dictionary=loaded;if(root!=null)refresh();}});
             } catch(Exception failure) {handler.post(()->{if(request==dictionaryGeneration&&englishView!=null)englishView.setText("词库加载失败，请切换基础词库重试");});}
             finally {executor.shutdown();}

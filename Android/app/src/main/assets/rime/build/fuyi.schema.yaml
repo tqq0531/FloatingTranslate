@@ -1,0 +1,57 @@
+__build_info:
+  rime_version: 1.17.0
+  timestamps:
+    default: 1792463821
+    default.custom: 0
+    fuyi.custom: 0
+    fuyi.schema: 1792463821
+engine:
+  processors:
+    - speller
+    - selector
+    - navigator
+    - express_editor
+  segmentors:
+    - abc_segmentor
+    - fallback_segmentor
+  translators:
+    - script_translator
+menu:
+  page_size: 30
+schema:
+  name: "浮译本地拼音"
+  schema_id: fuyi
+  version: 0.5.0
+speller:
+  algebra:
+    - "erase/^hm$/"
+    - "erase/^m$/"
+    - "erase/^n$/"
+    - "erase/^ng$/"
+    - "abbrev/^([a-z]).+$/$1/"
+    - "abbrev/^([zcs]h).+$/$1/"
+    - "derive/^([nl])ue$/$1ve/"
+    - "derive/^([jqxy])u/$1v/"
+    - "derive/un$/uen/"
+    - "derive/ui$/uei/"
+    - "derive/iu$/iou/"
+    - "derive/([aeiou])ng$/$1gn/"
+    - "derive/([dtngkhrzcs])o(u|ng)$/$1o/"
+    - "derive/ong$/on/"
+    - "derive/ao$/oa/"
+    - "derive/([iu])a(o|ng?)$/a$1$2/"
+  alphabet: zyxwvutsrqponmlkjihgfedcba
+  delimiter: " '"
+switches:
+  - name: ascii_mode
+    reset: 0
+translator:
+  dictionary: pinyin_simp
+  enable_completion: true
+  enable_encoder: false
+  enable_sentence: true
+  enable_user_dict: false
+  preedit_format:
+    - "xform/([nl])v/$1ü/"
+    - "xform/([nl])ue/$1üe/"
+    - "xform/([jqxy])v/$1u/"

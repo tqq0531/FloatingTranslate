@@ -1,3 +1,14 @@
+## Android 0.2.0 — 2026-10-29
+
+安卓原生 Rime 迁移 / Native Rime migration:
+- Independent native check asserts startup (no fallback accepted), reports Rime 1.17.0, and verifies nihao→你好, nh→你好, d→的, wojintianqubeijing→我今天去北京, nihaojintianzhogn→你好今天中. Fresh shared-data extraction is exercised.
+- Final build, resource checksum checks, lint and all 16 JVM tests passed.
+- Final device regression on Pixel_6 API 36 arm64: OK (26 tests), 174.602s. Covers native decoding, existing keyboard operations, English multiword typing/default output, translations, selection memory, 80-letter cap, punctuation, literal Enter, candidate expansion, geometry stability, settings and clipboard.
+- First native integration regression passed 25/26; exact extension candidate 微信 was hidden behind the native list. Fixed candidate merge ordering and awaited asynchronous dictionary reload. Final complete run passed all 26.
+- Separate real offline bilingual model test passed on final packaged APK: OK (1 test), 7.264s.
+- All four ABI libraries included and checksum verified. Execution tested on arm64 emulator only; other ABIs, 16 KB page devices and manufacturer-specific input clients still need device testing. No physical phone was modified.
+- Trime native binary and GPL/source notices documented in docs/native-rime.md and bundled licenses. Personal native Rime learning is disabled; encrypted FloatingTranslate word memory remains active. This is a functioning core migration, not a promise of commercial prediction accuracy.
+
 ## Android 0.1.13 — 2026-10-29
 
 候选上限从 20 提升到 100（实际数量取决于词库），折叠时展示前 20 个，展开网格可访问全部；同一查询复用候选结果，网格仅展开时构建。保留 0.1.12 英文空格续句和宿主重连修复。

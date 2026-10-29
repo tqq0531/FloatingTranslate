@@ -1,0 +1,10 @@
+__build_info:
+  rime_version: 1.17.0
+  timestamps:
+    default: 1792463821
+    default.custom: 0
+config_version: 0.5.0
+menu:
+  page_size: 30
+schema_list:
+  - schema: fuyi

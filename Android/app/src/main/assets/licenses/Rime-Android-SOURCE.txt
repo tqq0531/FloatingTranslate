@@ -1,0 +1,13 @@
+FloatingTranslate Android native input core
+
+Unmodified native library: Trime v3.3.12 (e09ac711), GPL-3.0-or-later.
+Official release: https://github.com/osfans/trime/releases/tag/v3.3.12
+Corresponding source: https://github.com/osfans/trime/tree/v3.3.12
+Clone source recursively: git clone --recursive --branch v3.3.12 https://github.com/osfans/trime.git
+Follow upstream build instructions to reproduce the JNI binary and its linked dependencies.
+
+FloatingTranslate Android source and bridge/build scripts:
+https://github.com/tqq0531/FloatingTranslate/tree/codex/android-ime/Android
+GPL license text: Trime-GPL-3.0.txt in this directory.
+Rime: BSD; see librime-LICENSE.txt. The source checkout includes notices and licenses of the pinned dependencies; retain them when rebuilding/redistributing.
+The native user dictionary and native learning are disabled. FloatingTranslate's bounded encrypted word-choice memory remains local.

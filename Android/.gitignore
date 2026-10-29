@@ -16,3 +16,6 @@ app/src/main/assets/translation-en-zh/*.onnx
 app/src/main/assets/translation-en-zh/source.spm
 app/src/main/assets/translation-en-zh/vocab.json
 app/src/main/assets/translation-en-zh/sp-map.json
+
+!app/src/main/assets/rime/build/
+!app/src/main/assets/rime/build/*

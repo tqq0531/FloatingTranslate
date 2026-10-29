@@ -157,7 +157,7 @@ public final class KeyboardDeviceTest extends InstrumentationTestCase {
         Options.prefs(context).edit().putBoolean("extendedDictionary",false).commit();Thread.sleep(1200);
         type("w");tap("空格");assertEquals("的我",text());
         Options.prefs(context).edit().putBoolean("extendedDictionary",true).commit();Thread.sleep(1800);
-        type("weixin");assertNotNull("Bundled extended word",find("微信",false));tap("微信");
+        type("weixin");for(int i=0;i<100&&find("微信",false)==null;i++)Thread.sleep(100);assertNotNull("Bundled extended word",find("微信",false));tap("微信");
         assertEquals("的我微信",text());screenshot("keyboard-017.png");
     }
     public void testRealSoftKeyboardChineseEnglishAndHistoryInsertion()throws Exception {

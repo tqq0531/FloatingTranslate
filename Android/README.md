@@ -1,10 +1,12 @@
+> Android 0.2.0：接入 Rime 1.17.0 原生拼音核心，内置全拼、简拼、整句候选与错拼方案；保留加密选词记忆、离线翻译及现有键盘。[接入来源与重建说明](docs/native-rime.md)。/ Native Rime candidate decoding with existing offline translation and encrypted local learning.
+
 > Android 0.1.9：长串容错组句与启动时按键保留。/ Full-span tolerant Pinyin candidates and preserved startup keystrokes.
 
 > Android 0.1.8：长译文和拼音支持左右滑动；本次拼音最多 80 个字母，达到上限提示先选词上屏。新增加密选词记忆与联想、独立数字/符号入口和圆形工具按钮。/ Scrollable translation and Pinyin, an explicit 80-letter composition limit, encrypted local learning, and revised keyboard controls.
 
 > Android 0.1.7：新增可切换的雾凇常用词扩展、单字简拼与混合简拼，改进键盘稳定布局、键帽与按压反馈。[详情与词库许可](docs/keyboard-017.md)。两种词库均离线运行。
 
-# 浮译 Android 0.1.8 / FloatingTranslate for Android
+# 浮译 Android 0.2.0 / FloatingTranslate for Android
 
 轻量中英翻译键盘：中文拼音、英文输入、离线双向翻译，以及保留 24 小时的文字剪贴板。0.1.6 重新设计按键和布局，提供自定义高度及跟随系统的深浅色外观。
 
@@ -75,9 +77,9 @@ python3 -m venv .model-venv
   -Pandroid.testInstrumentationRunnerArguments.class=com.fuyi.keyboard.TranslationModelDeviceTest
 ```
 
-产物：`app/build/outputs/apk/debug/app-debug.apk`。最低 Android 8.0 / API 26。当前使用 ONNX Runtime Extensions 0.13.0，tokenizer 仍为 4 KB ELF 对齐；未保证 16 KB 内存页设备兼容，不用于直接上架 Google Play。模拟器通过不能代替各品牌真机验收。拼音使用本地 Java 词典，候选、模糊拼音与个人词频能力不等同于桌面 Rime。
+产物：`app/build/outputs/apk/debug/app-debug.apk`。最低 Android 8.0 / API 26。当前使用 ONNX Runtime Extensions 0.13.0，tokenizer 仍为 4 KB ELF 对齐；未保证 16 KB 内存页设备兼容，不用于直接上架 Google Play。模拟器通过不能代替各品牌真机验收。拼音由原生 Rime 优先生成候选，Java 词库保留为扩展和兼容回退；个人记忆使用浮译本地加密存储。
 
-Output: `app/build/outputs/apk/debug/app-debug.apk`, Android 8.0/API 26+. The current tokenizer library is 4 KB ELF-aligned; 16 KB page devices are not guaranteed and this debug build is not intended for direct Play Store publication. Emulator validation does not cover every manufacturer. Pinyin uses a local Java dictionary rather than desktop Rime.
+Output: `app/build/outputs/apk/debug/app-debug.apk`, Android 8.0/API 26+. The current tokenizer library is 4 KB ELF-aligned; 16 KB page devices are not guaranteed and this debug build is not intended for direct Play Store publication. Emulator validation does not cover every manufacturer. Pinyin uses native Rime with Java extension/fallback candidates. Encrypted personal choice memory is managed separately.
 
 测试记录见 [TESTING.md](TESTING.md)。/ See [test results](TESTING.md).
 

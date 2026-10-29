@@ -1,0 +1,58 @@
+[
+  {
+    "file": "app/src/main/jniLibs/armeabi-v7a/libfuyi_rime.so",
+    "sha256": "1f9e76faea1512e92fa13203b815e58bf74f41ea5a4313de6b155048f3b68f9e"
+  },
+  {
+    "file": "app/src/main/jniLibs/armeabi-v7a/librime_jni.so",
+    "sha256": "a653848ef5e557223ec3fa6c54369e4f6f661e26e21c4594c9c000689f5b826f"
+  },
+  {
+    "file": "app/src/main/jniLibs/x86/libfuyi_rime.so",
+    "sha256": "ec494b6bd72589eb8f22636b30676223a40ec443ff911b22d58e5e3d774a1a25"
+  },
+  {
+    "file": "app/src/main/jniLibs/x86/librime_jni.so",
+    "sha256": "6a92759932c3b943b9e8ec6528ed4b5c4f537762ab085710ab578eb55761b192"
+  },
+  {
+    "file": "app/src/main/jniLibs/arm64-v8a/libfuyi_rime.so",
+    "sha256": "09c420768593e93f68fa3d5ccbbde0d50c1d47c975388043883957cb5463d35f"
+  },
+  {
+    "file": "app/src/main/jniLibs/arm64-v8a/librime_jni.so",
+    "sha256": "6e2543f874f247016d791c91ab82e53979157f217be80efc472c9537afaff75f"
+  },
+  {
+    "file": "app/src/main/jniLibs/x86_64/libfuyi_rime.so",
+    "sha256": "ccb2dca2baac75b95c36c30d7c3f038df76d5e51d2c699ea324a7678f93f26cd"
+  },
+  {
+    "file": "app/src/main/jniLibs/x86_64/librime_jni.so",
+    "sha256": "98869ae0866f4f5ea452f76cfaa0889b98bf9b11ac33a62d0534d43c14cb9128"
+  },
+  {
+    "file": "app/src/main/assets/rime/default.yaml",
+    "sha256": "5da6e6988345064e1bd66934299f75715d54115ee70ceea854e2a1e4e7cdcb41"
+  },
+  {
+    "file": "app/src/main/assets/rime/build/fuyi.schema.yaml",
+    "sha256": "3b0666330ae715e74cb415d89e341a967e6e9f4ddf58508c642471fd24cced57"
+  },
+  {
+    "file": "app/src/main/assets/rime/build/pinyin_simp.table.bin",
+    "sha256": "92ebf5bdee3a42302e3813183b6dcf07fff172b4f9b0709884227b96b0352b6a"
+  },
+  {
+    "file": "app/src/main/assets/rime/build/pinyin_simp.prism.bin",
+    "sha256": "1992ee74d7ab2a5b96ebef7a410b3448473a7bbede62d41e611f9a38e7d46c85"
+  },
+  {
+    "file": "app/src/main/assets/rime/build/pinyin_simp.reverse.bin",
+    "sha256": "3865501c37f899c478f229081e3b8fbdf93f397026c8ae5bd958f9dfb695fb1c"
+  },
+  {
+    "file": "app/src/main/assets/rime/build/default.yaml",
+    "sha256": "6bad08f147e391ba6a568943452065f62c6b3f15dd463fc0bd7894196316c7b2"
+  }
+]

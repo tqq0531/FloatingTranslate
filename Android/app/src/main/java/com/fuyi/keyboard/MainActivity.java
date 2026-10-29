@@ -147,7 +147,7 @@ public final class MainActivity extends Activity {
         toggle.setContentDescription("扩展开源词库");toggle.setChecked(Options.extendedDictionary(this));
         toggle.setOnCheckedChangeListener((v,on)->Options.prefs(this).edit().putBoolean("extendedDictionary",on).apply());
         SettingsUi.gap(card,8);
-        card.addView(SettingsUi.text(this,"已内置 · 无需下载 · 离线使用\n基础：Rime / AOSP 拼音词库\n扩展：iDvel/rime-ice，GPL-3.0；常用词精选版。\n支持单字简拼、词语简拼及全拼混输。",12,ui.MUTED,false));
+        card.addView(SettingsUi.text(this,"已内置 · 无需下载 · 离线使用\n输入核心：Rime 原生引擎\n基础：Rime / AOSP 拼音词库\n扩展：iDvel/rime-ice，GPL-3.0；常用词精选版。\n支持单字简拼、词语简拼及全拼混输。",12,ui.MUTED,false));
         card.addView(SettingsUi.button(this,"词库来源与许可证",ui.PALE,ui.INK,()->{
             try(var reader=new java.io.BufferedReader(new java.io.InputStreamReader(getAssets().open("licenses/RIME-ICE-NOTICE.txt")))){
                 StringBuilder text=new StringBuilder();String line;while((line=reader.readLine())!=null)text.append(line).append('\n');
