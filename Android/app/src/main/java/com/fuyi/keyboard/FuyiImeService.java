@@ -110,10 +110,10 @@ public final class FuyiImeService extends InputMethodService {
         LinearLayout.LayoutParams translationParams=new LinearLayout.LayoutParams(-1,Ui.dp(this,42));translationParams.setMargins(Ui.dp(this,5),0,Ui.dp(this,5),Ui.dp(this,4));root.addView(translationRow,translationParams);
         compositionView=Ui.text(this,"",12,palette.muted);compositionView.setSingleLine(true);compositionView.setEllipsize(null);compositionView.setPadding(Ui.dp(this,12),0,0,0);compositionScroll=new HorizontalScrollView(this);compositionScroll.setHorizontalScrollBarEnabled(false);compositionScroll.setContentDescription("左右滑动查看完整拼音");compositionScroll.setFillViewport(true);compositionScroll.addView(compositionView,new android.widget.FrameLayout.LayoutParams(-2,-1));root.addView(compositionScroll,new LinearLayout.LayoutParams(-1,Ui.dp(this,16)));
         candidateScroll=new HorizontalScrollView(this);candidateScroll.setHorizontalScrollBarEnabled(false);
-        candidateRow=new LinearLayout(this);candidateScroll.addView(candidateRow);candidateHeader=new LinearLayout(this);candidateHeader.setGravity(Gravity.CENTER_VERTICAL);
+        candidateRow=new LinearLayout(this);candidateScroll.addView(candidateRow);candidateHeader=new LinearLayout(this);candidateHeader.setBaselineAligned(false);candidateHeader.setGravity(Gravity.CENTER_VERTICAL);
         candidateHeader.addView(candidateScroll,new LinearLayout.LayoutParams(0,Ui.dp(this,40),1));
         expandCandidatesButton=Ui.icon(this,"down","展开候选词",()->{expandedCandidates=!expandedCandidates;refresh();});
-        candidateHeader.addView(expandCandidatesButton,new LinearLayout.LayoutParams(Ui.dp(this,40),Ui.dp(this,40)));root.addView(candidateHeader);
+        candidateHeader.addView(expandCandidatesButton,new LinearLayout.LayoutParams(Ui.dp(this,40),Ui.dp(this,40)));root.addView(candidateHeader,new LinearLayout.LayoutParams(-1,Ui.dp(this,40)));
         candidateGridScroll=new android.widget.ScrollView(this);candidateGrid=Ui.column(this);candidateGridScroll.addView(candidateGrid);root.addView(candidateGridScroll,new LinearLayout.LayoutParams(-1,Ui.dp(this,Options.keyHeight(this)*4)));
         keys=Ui.column(this);root.addView(keys);
         historyRows=Ui.column(this);root.addView(historyRows);
@@ -323,7 +323,7 @@ public final class FuyiImeService extends InputMethodService {
         {
             String[] rows=numbers?new String[]{"123","456","789"}:symbols?(moreSymbols?new String[]{"[]{}<>^~`|","_+×÷≠≈€£¢","…—·「」『』"}:new String[]{"1234567890","@#¥%&*()-","，。！？；：/"}):new String[]{"qwertyuiop","asdfghjkl","zxcvbnm"};
             for(int r=0;r<rows.length;r++){
-                LinearLayout line=new LinearLayout(this);
+                LinearLayout line=new LinearLayout(this);line.setBaselineAligned(false);
                 if(!symbols&&!numbers&&r==1)addSpacer(line,.5f);
                 if(r==2&&!numbers)addKey(line,symbols?"#+=":"⇧",symbols?"更多符号":"大写",1.5f,shifted?palette.key:palette.function,()->{if(symbols){moreSymbols=!moreSymbols;renderKeys();refresh();}else{shifted=!shifted;renderKeys();refresh();}},false);
                 for(int i=0;i<rows[r].length();i++){
@@ -337,7 +337,7 @@ public final class FuyiImeService extends InputMethodService {
                 keys.addView(line);
             }
         }
-        LinearLayout bottom=new LinearLayout(this);
+        LinearLayout bottom=new LinearLayout(this);bottom.setBaselineAligned(false);
         addKey(bottom,symbols||numbers?"ABC":"123","数字与符号",1.35f,palette.function,()->{numbers=!(numbers||symbols);symbols=false;moreSymbols=false;shifted=false;renderKeys();refresh();},false);
         addKey(bottom,"符","符号键盘",.9f,palette.function,()->{symbols=!symbols;numbers=false;moreSymbols=false;renderKeys();refresh();},false);
         addKey(bottom,latin?",":"，","逗号",.9f,palette.key,()->type(latin?",":"，"),false);

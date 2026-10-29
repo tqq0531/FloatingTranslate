@@ -70,6 +70,17 @@ public final class KeyboardDeviceTest extends InstrumentationTestCase {
             for(int i=0;i<30&&find("切换中英文：中文拼音",true)==null;i++)Thread.sleep(100);
         }
     }
+    public void testBottomAlignmentAndFirstKeyStability()throws Exception {
+        var q=bounds("按键 q");
+        var space=bounds("空格");
+        for(String name:new String[]{"数字与符号","符号键盘","逗号","切换中英文：中文拼音","执行：换行"}) {
+            var r=bounds(name);assertEquals(name,space.top,r.top);assertEquals(name,space.bottom,r.bottom);
+        }
+        type("y");assertEquals(q,bounds("按键 q"));
+        type("izhi");assertEquals(q,bounds("按键 q"));
+        Thread.sleep(1500);assertEquals(q,bounds("按键 q"));
+        screenshot("keyboard-0111-aligned.png");
+    }
     public void testPunctuationLiteralEnterAndExpandedCandidates()throws Exception {
         type("yizhi");assertNotNull(find("yizhi",false));
         screenshot("keyboard-0110-pinyin.png");

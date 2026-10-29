@@ -1,3 +1,9 @@
+## Android 0.1.11 — 2026-10-29
+
+修复底部不同字号按键因 LinearLayout 基线对齐而上下错位；固定候选栏 40dp，使其与 16dp 拼音栏合计和空闲工具栏 56dp 等高。各按键行不再按文字基线排布。
+
+Build, lint and 15 JVM tests passed. Pixel_6 API 36 focused device check passed (6.979s): all six bottom keys share identical top/bottom bounds; Q key bounds remain unchanged before typing, after the first letter, after yizhi, and after asynchronous candidate/translation updates. Screenshot visually inspected: keyboard-0111-aligned.png.
+
 ## Android 0.1.10 — 2026-10-29
 
 拼音栏使用明确的内容宽度和填充视口，修复仅显示首字母；新增可滚动的三列候选展开面板。中文组词期间输入标点先确认中文，进入数字/符号页保留组词；有拼音时操作键原样上屏，下一次再执行宿主动作。空格继续选中文，译文通过“用英文”提交。
