@@ -32,4 +32,15 @@ public class PinyinDictionaryTest {
         assertTrue(extended.candidates("wugeyi").stream().anyMatch(c->c.text().equals("五个亿")));
         assertEquals("的",extended.candidates("d").get(0).text());
     }
+    @Test public void longMixedAndMistypedInputKeepsWholeCandidate() {
+        for(String raw:new String[]{"nihaoajintianhiodezy","nihaoajitnianguodeznyang","nihaojintianzhogn","nihaojintiand","ni'hao'jin'tian'h"}) {
+            var first=engine.candidates(raw).get(0);
+            assertEquals(raw,raw.length(),first.consumed());
+            assertTrue(raw+" -> "+first.text(),first.text().length()>3);
+        }
+        assertTrue(engine.candidates("nihaojintianzhogn").get(0).text().endsWith("中"));
+        assertTrue(engine.candidates("nihaoajintianhiodezy").stream().anyMatch(c->c.text().equals("你好")&&c.consumed()==5));
+        String raw="nihao".repeat(16);
+        assertEquals(80,engine.candidates(raw).get(0).consumed());
+    }
 }

@@ -1,3 +1,5 @@
+> Android 0.1.9：长串容错组句与启动时按键保留。/ Full-span tolerant Pinyin candidates and preserved startup keystrokes.
+
 > Android 0.1.8：长译文和拼音支持左右滑动；本次拼音最多 80 个字母，达到上限提示先选词上屏。新增加密选词记忆与联想、独立数字/符号入口和圆形工具按钮。/ Scrollable translation and Pinyin, an explicit 80-letter composition limit, encrypted local learning, and revised keyboard controls.
 
 > Android 0.1.7：新增可切换的雾凇常用词扩展、单字简拼与混合简拼，改进键盘稳定布局、键帽与按压反馈。[详情与词库许可](docs/keyboard-017.md)。两种词库均离线运行。

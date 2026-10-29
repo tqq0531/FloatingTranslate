@@ -70,6 +70,19 @@ public final class KeyboardDeviceTest extends InstrumentationTestCase {
             for(int i=0;i<30&&find("切换中英文：中文拼音",true)==null;i++)Thread.sleep(100);
         }
     }
+    public void testLongPinyinWholeCandidateAndPartialChoice()throws Exception {
+        type("nihaojintianzhogn");
+        screenshot("keyboard-019-long.png");
+        tap("空格");
+        assertTrue(text(),text().startsWith("你好"));
+        assertTrue(text(),text().endsWith("中"));
+        assertFalse(text(),text().matches(".*[a-z].*"));
+        getInstrumentation().runOnMainSync(()->{editor.setText("");activity.getSystemService(InputMethodManager.class).restartInput(editor);});Thread.sleep(400);
+        type("nihaoajintianhiodezy");tap("你好");
+        assertEquals("你好ajintianhiodezy",text());
+        tap("空格");assertTrue(text(),text().length()>4);
+        assertFalse(text(),text().contains("ajintianhiodezy"));
+    }
     public void testRememberedChoiceAndLongPinyinLimit()throws Exception {
         type("shi");tap("时");
         getInstrumentation().runOnMainSync(()->{editor.setText("");activity.getSystemService(InputMethodManager.class).restartInput(editor);});Thread.sleep(400);

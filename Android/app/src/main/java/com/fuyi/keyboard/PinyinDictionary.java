@@ -82,15 +82,57 @@ public final class PinyinDictionary {
         }
         return text[code.length()] == null ? "" : text[code.length()];
     }
+    /** Decode every input position, including mixed initials and unfinished syllables.
+     * Exact sentence decoding remains preferred. Never silently discard unknown letters. */
+    private String tolerantSentence(String code) {
+        if (!code.matches("[a-z]+") || code.length()>80) return "";
+        int size=code.length();
+        double[] score=new double[size+1]; Arrays.fill(score,Double.NEGATIVE_INFINITY); score[0]=0;
+        String[] text=new String[size+1]; text[0]="";
+        for(int start=0;start<size;start++) {
+            // Retain a genuinely unknown letter rather than dropping the rest of a draft.
+            improve(score,text,start,start+1,String.valueOf(code.charAt(start)),-45);
+            for(int end=start+1;end<=Math.min(size,start+maxCode);end++) {
+                String part=code.substring(start,end);
+                List<Word> words=full.get(part);
+                if(words!=null) extend(score,text,start,end,words.get(0),0);
+                words=initials.get(part);
+                if(words!=null) extend(score,text,start,end,words.get(0),22);
+                // Prefix completion is restricted to the last segment, not interior letters.
+                if(end==size) {
+                    words=prefixes.get(part);
+                    if(words!=null) extend(score,text,start,end,words.get(0),14);
+                }
+                // Correct adjacent transposition within a syllable/word without changing
+                // how many original keystrokes the resulting candidate consumes.
+                if(part.length()>=3 && part.length()<=8 && !full.containsKey(part))
+                    for(int i=0;i+1<part.length();i++) {
+                        char[] swap=part.toCharArray();char c=swap[i];swap[i]=swap[i+1];swap[i+1]=c;
+                        words=full.get(new String(swap));
+                        if(words!=null) extend(score,text,start,end,words.get(0),6);
+                    }
+            }
+        }
+        return text[size];
+    }
+    private void extend(double[] scores,String[] text,int start,int end,Word word,double penalty) {
+        improve(scores,text,start,end,word.text(),Math.log1p(word.weight())+4*word.text().length()-14-penalty);
+    }
+    private void improve(double[] scores,String[] text,int start,int end,String word,double delta) {
+        if(text[start]!=null && scores[start]+delta>scores[end]) {
+            scores[end]=scores[start]+delta;text[end]=text[start]+word;
+        }
+    }
     public List<Candidate> candidates(String raw) {
         String code = clean(raw); if (code.isEmpty()) return List.of();
         LinkedHashMap<String,Candidate> result = new LinkedHashMap<>();
         String sentence = complete(raw);
+        if(sentence.isEmpty() && code.length()>1) sentence=tolerantSentence(code);
         if (!sentence.isEmpty()) result.put(sentence,new Candidate(sentence,raw.length()));
         add(result,full.get(code),raw.length());
         add(result,prefixes.get(code),raw.length());
         add(result,initials.get(code),raw.length());
-        if (result.isEmpty()) {
+        if (!full.containsKey(code)) {
             // A common accidental adjacent-letter swap, preserving original keystroke consumption.
             for (int i=0; i+1<code.length(); i++) {
                 char[] swapped = code.toCharArray(); char c=swapped[i]; swapped[i]=swapped[i+1]; swapped[i+1]=c;

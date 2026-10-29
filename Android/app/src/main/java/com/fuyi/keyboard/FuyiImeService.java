@@ -188,7 +188,7 @@ public final class FuyiImeService extends InputMethodService {
             if(!privateField && !latin && !sentence.isEmpty()) {sentence+=value;touched=android.os.SystemClock.elapsedRealtime();refresh();}
             else clearSentence();return;
         }
-        if(dictionary==null){englishView.setText("词库正在准备，请稍候");return;}
+        // Keep keystrokes while the asynchronous dictionary load finishes.
         if(raw.isEmpty()) { if(expired())clearSentence();compositionStart=lastSelection; }
         if(raw.length()>=80){limitNotice("本次拼音已达 80 个字母，请先选词上屏");return;}
         raw+=value;expectedCaret=compositionStart<0?-1:compositionStart+raw.length();ic.setComposingText(raw,1);refresh();compositionScroll.post(()->compositionScroll.fullScroll(View.FOCUS_RIGHT));

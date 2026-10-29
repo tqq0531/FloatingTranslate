@@ -1,3 +1,11 @@
+## Android 0.1.9 — 2026-10-29
+
+长串拼音增加整串容错候选，支持混合简拼、末尾补全和相邻字母交换；保留分段候选及其原始输入消耗长度。无法识别的字母保留，不静默丢弃。修复词库异步加载期间忽略最初按键的问题。
+
+Full-span fallback candidates support mixed initials, trailing completion and adjacent transposition. Partial candidates remain available; unknown letters are retained. Keystrokes are preserved during dictionary loading. This dictionary-based decoder does not guarantee intended meaning or WeChat-level prediction.
+
+Build, lint and all 15 JVM tests passed. One focused Pixel_6 API 36 instrumentation test passed: type nihaojintianzhogn and commit the full Chinese candidate; type nihaoajintianhiodezy, choose 你好, verify the exact remaining Pinyin, then commit the remainder. Gradle's offline device runner lacked a cached UTP dependency, so APKs were installed and the same instrumentation test executed directly through adb.
+
 ## Android 0.1.8 — 2026-10-28
 
 Build, lint and 14 JVM tests passed. On the Mac-hosted Pixel_6 API 36 emulator, the combined run passed 19 of 20 device checks. The remaining real-model test exceeded its old 5-second wait; after extending that test wait to 30 seconds, it passed. A final targeted run passed all three checks: real-model default output/copy, long translation scrolling plus numeric/symbol layout, and encrypted personal dictionary persistence. Across these runs all 21 distinct device checks passed; this is not a claim of physical-phone coverage.
